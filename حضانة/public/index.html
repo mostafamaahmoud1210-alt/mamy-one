@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mamy One – نظام إدارة الحضانات المتكامل</title>
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            teal: {
+              50: '#f0fdfa',
+              100: '#ccfbf1',
+              500: '#14b8a6',
+              600: '#0d9488',
+              700: '#0f766e',
+              800: '#115e59',
+              900: '#134e4a'
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Cairo Font & Custom Styles -->
+  <link rel="stylesheet" href="/css/style.css">
+  
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220%22%22><text y=%2222%22 font-size=%2222%22>🧸</text></svg>">
+</head>
+<body class="bg-slate-50 text-slate-800 antialiased min-h-screen flex flex-col">
+
+  <!-- ==================== TOP NAVIGATION BAR ==================== -->
+  <header class="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm no-print">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      
+      <!-- Logo & Title -->
+      <div class="flex items-center gap-3">
+        <button id="btn-toggle-sidebar" class="md:hidden p-2 text-slate-600 hover:text-teal-600 rounded-lg hover:bg-slate-100 focus:outline-none">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+        </button>
+        <div class="flex items-center gap-2.5">
+          <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-teal-600 to-teal-400 flex items-center justify-center text-white text-xl shadow-md shadow-teal-500/20">
+            🧸
+          </div>
+          <div>
+            <h1 class="text-lg font-bold text-slate-900 leading-none">Mamy One</h1>
+            <span class="text-xs text-teal-600 font-semibold tracking-wide">نظام إدارة وحسابات الحضانات</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Center Status & Live Clock -->
+      <div class="hidden lg:flex items-center gap-4 text-xs text-slate-500 bg-slate-50 px-3 py-1.5 rounded-full border border-slate-200/80">
+        <div class="flex items-center gap-1.5">
+          <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+          <span>القاهرة:</span>
+          <span id="live-cairo-clock" class="font-mono font-bold text-slate-700">--:--:--</span>
+        </div>
+        <span class="text-slate-300">|</span>
+        <span id="today-cairo-date" class="font-medium text-slate-600">--/--/----</span>
+      </div>
+
+      <!-- Right User & Notifications -->
+      <div class="flex items-center gap-3" id="auth-header-section">
+        <!-- Notification Bell -->
+        <div class="relative">
+          <button id="btn-notifications" class="p-2 text-slate-600 hover:text-teal-600 hover:bg-slate-100 rounded-xl relative transition">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
+            <span id="notif-badge" class="hidden absolute top-1 right-1 w-4 h-4 bg-rose-500 text-white text-[10px] font-bold rounded-full items-center justify-center">0</span>
+          </button>
+          
+          <!-- Notifications Dropdown -->
+          <div id="notif-dropdown" class="hidden absolute left-0 mt-2 w-80 bg-white rounded-2xl shadow-xl border border-slate-200 py-2 z-50 animate-fadeIn">
+            <div class="px-4 py-2 border-b border-slate-100 flex items-center justify-between">
+              <span class="font-bold text-sm text-slate-900">التنبيهات والإشعارات</span>
+              <button id="btn-run-scheduler-now" class="text-xs text-teal-600 hover:underline">فحص آلي الآن</button>
+            </div>
+            <div id="notif-list" class="max-h-72 overflow-y-auto divide-y divide-slate-50 text-xs text-slate-600">
+              <div class="p-4 text-center text-slate-400">لا توجد إشعارات جديدة</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- User Info Badge & Logout -->
+        <div class="flex items-center gap-2 pl-2 border-r border-slate-200">
+          <div class="w-8 h-8 rounded-full bg-teal-100 text-teal-700 flex items-center justify-center font-bold text-sm" id="user-avatar-letter">م</div>
+          <div class="hidden sm:block text-right">
+            <div class="text-xs font-bold text-slate-800" id="user-display-name">مدير النظام</div>
+            <div class="text-[11px] text-teal-600" id="user-display-role">مدير عام</div>
+          </div>
+          <button id="btn-logout" title="تسجيل الخروج" class="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </header>
+
+  <!-- ==================== MAIN APPLICATION CONTAINER ==================== -->
+  <div class="flex-1 flex max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 gap-6">
+
+    <!-- SIDEBAR NAVIGATION -->
+    <aside id="sidebar-nav" class="w-64 flex-shrink-0 bg-white rounded-2xl p-4 border border-slate-200 shadow-sm hidden md:flex flex-col gap-1.5 self-start sticky top-24 no-print">
+      
+      <div class="text-[11px] font-bold text-slate-400 uppercase px-3 py-1">الأقسام الرئيسية</div>
+      
+      <button data-page="dashboard" class="nav-item active flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-semibold text-teal-700 bg-teal-50 transition">
+        <span>📊</span> <span>لوحة الإحصائيات</span>
+      </button>
+
+      <button data-page="students" class="nav-item flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-semibold text-slate-600 hover:bg-slate-50 hover:text-teal-600 transition">
+        <span>👶</span> <span>شؤون الأطفال</span>
+      </button>
+
+      <button data-page="attendance" class="nav-item flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-semibold text-slate-600 hover:bg-slate-50 hover:text-teal-600 transition">
+        <span>📅</span> <span>الحضور والغياب</span>
+      </button>
+
+      <button data-page="sessions" class="nav-item flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-semibold text-slate-600 hover:bg-slate-50 hover:text-teal-600 transition">
+        <span>🗣️</span> <span>الجلسات والتخاطب</span>
+      </button>
+
+      <div class="text-[11px] font-bold text-slate-400 uppercase px-3 py-1 mt-3">المالية والحسابات</div>
+
+      <button data-page="payments" class="nav-item flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-semibold text-slate-600 hover:bg-slate-50 hover:text-teal-600 transition">
+        <span>💵</span> <span>المقبوضات وسندات القبض</span>
+      </button>
+
+      <button data-page="outstanding" class="nav-item flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-semibold text-slate-600 hover:bg-slate-50 hover:text-teal-600 transition">
+        <span>⚠️</span> <span>المتأخرات وتذكير الواتساب</span>
+      </button>
+
+      <button data-page="expenses" class="nav-item flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-semibold text-slate-600 hover:bg-slate-50 hover:text-teal-600 transition">
+        <span>📉</span> <span>المصروفات والخزينة</span>
+      </button>
+
+      <button data-page="payroll" class="nav-item flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-semibold text-slate-600 hover:bg-slate-50 hover:text-teal-600 transition">
+        <span>👩‍🏫</span> <span>الموظفون والرواتب</span>
+      </button>
+
+      <button data-page="reports" class="nav-item flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-semibold text-slate-600 hover:bg-slate-50 hover:text-teal-600 transition">
+        <span>📑</span> <span>التقارير المالية والتدفقات</span>
+      </button>
+
+      <div class="text-[11px] font-bold text-slate-400 uppercase px-3 py-1 mt-3">الإدارة والنظام</div>
+
+      <button data-page="audit" class="nav-item flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-semibold text-slate-600 hover:bg-slate-50 hover:text-teal-600 transition">
+        <span>🛡️</span> <span>سجل المراقبة والتدقيق</span>
+      </button>
+
+      <button data-page="settings" class="nav-item flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-semibold text-slate-600 hover:bg-slate-50 hover:text-teal-600 transition">
+        <span>⚙️</span> <span>إعدادات الحضانة والمستخدمين</span>
+      </button>
+
+      <!-- Quick Action Buttons -->
+      <div class="mt-4 pt-3 border-t border-slate-100 flex flex-col gap-2">
+        <button id="btn-quick-add-student" class="btn btn-primary text-xs py-2 w-full">
+          <span>+</span> <span>إضافة طفل جديد</span>
+        </button>
+        <button id="btn-quick-add-payment" class="btn btn-secondary text-xs py-2 w-full">
+          <span>+</span> <span>تسجيل دفعة نقدية</span>
+        </button>
+      </div>
+
+    </aside>
+
+    <!-- MAIN DYNAMIC CONTENT AREA -->
+    <main id="app-content" class="flex-1 min-w-0 flex flex-col gap-6">
+      <!-- Pages will be rendered here by app.js -->
+    </main>
+
+  </div>
+
+  <!-- ==================== MODALS CONTAINER ==================== -->
+  <div id="modal-container"></div>
+
+  <!-- ==================== TOAST NOTIFICATIONS ==================== -->
+  <div id="toast-container"></div>
+
+  <!-- Application JS -->
+  <script src="/js/app.js"></script>
+</body>
+</html>

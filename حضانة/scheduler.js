@@ -1,0 +1,157 @@
+const { db, getCairoNow, getCairoDate } = require('./db');
+const { logAudit } = require('./audit');
+
+/**
+ * Run automated scheduled routines:
+ * 1. Overdue tuition fees scan
+ * 2. Upcoming payment deadlines (3 days ahead)
+ * 3. Unpaid payroll obligations
+ */
+function runScheduledTasks() {
+  const today = getCairoDate(); // 'YYYY-MM-DD'
+  const [currentYear, currentMonth, currentDay] = today.split('-').map(Number);
+  const currentMonthKey = `${currentYear}-${String(currentMonth).padStart(2, '0')}`;
+
+  let overdueCount = 0;
+  let upcomingCount = 0;
+  let unpaidSalariesCount = 0;
+
+  try {
+    // 1. Scan for Overdue Tuition:
+    // Active students whose due day of the month <= currentDay, and have unpaid/partially paid charges
+    const overdueStudents = db.prepare(`
+      SELECT s.id, s.code, s.full_name, s.payment_due_day,
+             COALESCE(SUM(c.net_amount - c.paid_amount), 0) as balance
+      FROM students s
+      JOIN student_charges c ON s.id = c.student_id
+      WHERE s.status = 'active'
+        AND c.status IN ('unpaid', 'partially_paid')
+        AND date(c.due_date) < date(?)
+      GROUP BY s.id
+      HAVING balance > 0
+    `).all(today);
+
+    for (const st of overdueStudents) {
+      overdueCount++;
+      // Check if notification already logged today
+      const existing = db.prepare(`
+        SELECT id FROM notifications
+        WHERE type = 'overdue_fee' AND link = ? AND date(created_at) = date(?)
+      `).get(`/students/${st.id}`, today);
+
+      if (!existing) {
+        db.prepare(`
+          INSERT INTO notifications (type, title, message, link, is_read, created_at)
+          VALUES ('overdue_fee', ?, ?, ?, 0, ?)
+        `).run(
+          `رسوم دراسية متأخرة: ${st.full_name}`,
+          `الطفل كود (${st.code}) لديه متأخرات مستحقة بقيمة ${st.balance} ج.م تجاوزت موعد الاستحقاق.`,
+          `/students/${st.id}`,
+          getCairoNow()
+        );
+      }
+    }
+
+    // 2. Upcoming Payment Deadlines (next 3 days):
+    const threeDaysLater = new Date();
+    threeDaysLater.setDate(threeDaysLater.getDate() + 3);
+    const threeDaysStr = threeDaysLater.toLocaleDateString('sv-SE', { timeZone: 'Africa/Cairo' });
+
+    const upcomingCharges = db.prepare(`
+      SELECT s.id, s.code, s.full_name, c.net_amount - c.paid_amount as remaining, c.due_date
+      FROM student_charges c
+      JOIN students s ON c.student_id = s.id
+      WHERE s.status = 'active'
+        AND c.status IN ('unpaid', 'partially_paid')
+        AND date(c.due_date) >= date(?)
+        AND date(c.due_date) <= date(?)
+    `).all(today, threeDaysStr);
+
+    for (const ch of upcomingCharges) {
+      upcomingCount++;
+      const existing = db.prepare(`
+        SELECT id FROM notifications
+        WHERE type = 'upcoming_due' AND link = ? AND date(created_at) = date(?)
+      `).get(`/students/${ch.id}`, today);
+
+      if (!existing) {
+        db.prepare(`
+          INSERT INTO notifications (type, title, message, link, is_read, created_at)
+          VALUES ('upcoming_due', ?, ?, ?, 0, ?)
+        `).run(
+          `موعد استحقاق قادم: ${ch.full_name}`,
+          `يستحق قسط بقيمة ${ch.remaining} ج.م بتاريخ ${ch.due_date} للطفل كود (${ch.code}).`,
+          `/students/${ch.id}`,
+          getCairoNow()
+        );
+      }
+    }
+
+    // 3. Unpaid Salaries Check:
+    const unpaidPayroll = db.prepare(`
+      SELECT p.id, e.full_name, p.month, (p.net_salary - p.paid_amount) as remaining
+      FROM payroll_records p
+      JOIN employees e ON p.employee_id = e.id
+      WHERE p.status IN ('unpaid', 'partially_paid')
+    `).all();
+
+    for (const pay of unpaidPayroll) {
+      unpaidSalariesCount++;
+      const existing = db.prepare(`
+        SELECT id FROM notifications
+        WHERE type = 'unpaid_salary' AND message LIKE ? AND date(created_at) = date(?)
+      `).get(`%${pay.full_name}%`, today);
+
+      if (!existing) {
+        db.prepare(`
+          INSERT INTO notifications (type, title, message, link, is_read, created_at)
+          VALUES ('unpaid_salary', ?, ?, '/payroll', 0, ?)
+        `).run(
+          `مستحقات راتب غير مسددة: ${pay.full_name}`,
+          `يوجد متبقي راتب بقيمة ${pay.remaining} ج.م لشهر ${pay.month}.`,
+          getCairoNow()
+        );
+      }
+    }
+
+    logAudit({
+      user: null,
+      action: 'SCHEDULED_CHECK_COMPLETED',
+      entityType: 'system_scheduler',
+      entityId: today,
+      details: { overdueCount, upcomingCount, unpaidSalariesCount }
+    });
+
+    return { success: true, overdueCount, upcomingCount, unpaidSalariesCount, checkedAt: getCairoNow() };
+  } catch (err) {
+    console.error('Scheduled tasks error:', err);
+    logAudit({
+      user: null,
+      action: 'SCHEDULED_CHECK_FAILED',
+      entityType: 'system_scheduler',
+      entityId: today,
+      reason: err.message
+    });
+    return { success: false, error: err.message };
+  }
+}
+
+/**
+ * Start background scheduler: runs once on server start, then every 6 hours
+ */
+function startScheduler() {
+  // Run initial check after 5 seconds
+  setTimeout(() => {
+    runScheduledTasks();
+  }, 5000);
+
+  // Repeat every 6 hours (21600000 ms)
+  setInterval(() => {
+    runScheduledTasks();
+  }, 6 * 60 * 60 * 1000);
+}
+
+module.exports = {
+  runScheduledTasks,
+  startScheduler
+};

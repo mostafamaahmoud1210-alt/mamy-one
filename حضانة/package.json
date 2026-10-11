@@ -1,0 +1,21 @@
+{
+  "name": "mamy-one",
+  "version": "1.0.0",
+  "description": "Mamy One – Complete Production-Ready Nursery Management System in Arabic",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node tests/test_acceptance.js"
+  },
+  "keywords": [
+    "nursery",
+    "management",
+    "arabic",
+    "accounting",
+    "tuition",
+    "attendance",
+    "speech-therapy"
+  ],
+  "author": "Mamy One Team",
+  "license": "Proprietary"
+}
