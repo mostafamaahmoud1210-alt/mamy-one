@@ -104,6 +104,15 @@ const server = http.createServer((req, res) => {
   });
 });
 
+server.on('error', (err) => {
+  if (err.code === 'EADDRINUSE') {
+    console.log(`\n[!] تنبيه: المنفذ ${PORT} قيد الاستخدام بالفعل. البرنامج يعمل بالفعل في نافذة أخرى.`);
+    console.log(`يمكنك فتح الرابط مباشرة في المتصفح: http://localhost:${PORT}\n`);
+  } else {
+    console.error('Server error:', err);
+  }
+});
+
 server.listen(PORT, '0.0.0.0', () => {
   const msg = `
 =============================================================

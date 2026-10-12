@@ -474,10 +474,18 @@ function initSchema() {
     `).run(getCairoNow(), getCairoNow());
   }
 
-  // Initialize student_code_sequence if empty
+  // Initialize and sync student_code_sequence with current state
+  const existingStuds = db.prepare('SELECT code FROM students WHERE code >= 1001').all();
+  const takenCodes = new Set(existingStuds.map(r => Number(r.code)));
+  let lowestFree = 1001;
+  while (takenCodes.has(lowestFree)) {
+    lowestFree++;
+  }
   const seq = db.prepare('SELECT COUNT(*) as count FROM student_code_sequence').get();
   if (seq.count === 0) {
-    db.prepare('INSERT INTO student_code_sequence (id, next_code) VALUES (1, 1001)').run();
+    db.prepare('INSERT INTO student_code_sequence (id, next_code) VALUES (1, ?)').run(lowestFree);
+  } else {
+    db.prepare('UPDATE student_code_sequence SET next_code = ? WHERE id = 1').run(lowestFree);
   }
 
   // Seed standard expense categories if empty
@@ -567,19 +575,31 @@ function initSchema() {
 
 /**
  * Atomic Student Code Generator:
- * Guarantees first child gets 1001, then 1002, 1003...
- * Never duplicates, never reuses even if students are deleted.
+ * Generates sequential codes starting at 1001.
+ * When a child is deleted or a code is freed, the lowest free code (>= 1001) is reused automatically.
  */
 function getNextStudentCode() {
-  let row = db.prepare('SELECT next_code FROM student_code_sequence WHERE id = 1').get();
-  let code = 1001;
-  if (!row) {
-    db.prepare('INSERT INTO student_code_sequence (id, next_code) VALUES (1, 1002)').run();
-    code = 1001;
-  } else {
-    code = row.next_code;
-    db.prepare('UPDATE student_code_sequence SET next_code = next_code + 1 WHERE id = 1').run();
+  const taken = new Set(db.prepare('SELECT code FROM students WHERE code >= 1001').all().map(r => Number(r.code)));
+  let seqRow = db.prepare('SELECT next_code FROM student_code_sequence WHERE id = 1').get();
+  let code = seqRow ? Number(seqRow.next_code) : 1001;
+
+  // If code is already taken in students table, advance until free
+  while (taken.has(code)) {
+    code++;
   }
+
+  // Advance sequence for next call
+  let nextCandidate = code + 1;
+  while (taken.has(nextCandidate)) {
+    nextCandidate++;
+  }
+
+  if (!seqRow) {
+    db.prepare('INSERT INTO student_code_sequence (id, next_code) VALUES (1, ?)').run(nextCandidate);
+  } else {
+    db.prepare('UPDATE student_code_sequence SET next_code = ? WHERE id = 1').run(nextCandidate);
+  }
+
   return code;
 }
 

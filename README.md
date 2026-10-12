@@ -1,3 +1,13 @@
+---
+title: Mamy One Nursery
+emoji: 🧸
+colorFrom: teal
+colorTo: green
+sdk: docker
+app_port: 7860
+pinned: false
+---
+
 # Mamy One – نظام إدارة وحسابات الحضانات المتكامل
 
 نظام برمجي متكامل، احترافي وجاهز للتشغيل والإنتاج لإدارة الحضانات ومراكز رعاية الطفولة المبكرة والتخاطب وتنمية المهارات.

@@ -365,6 +365,7 @@ async function handleApi(req, res, pathname, query, body) {
       full_name,
       dob,
       gender,
+      photo,
       enrollment_date,
       classification = 'regular',
       classroom_id,
@@ -397,10 +398,10 @@ async function handleApi(req, res, pathname, query, body) {
 
       const insertStudent = db.prepare(`
         INSERT INTO students (
-          code, full_name, dob, gender, enrollment_date, status, classification,
+          code, full_name, dob, gender, photo, enrollment_date, status, classification,
           classroom_id, teacher_id, monthly_tuition, payment_due_day,
           discount_amount, discount_reason, medical_notes, notes, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
 
       const resInsert = insertStudent.run(
@@ -408,6 +409,7 @@ async function handleApi(req, res, pathname, query, body) {
         full_name,
         dob,
         gender || 'ذكر',
+        photo || null,
         enrollment_date,
         classification,
         classroom_id || null,
@@ -589,6 +591,7 @@ async function handleApi(req, res, pathname, query, body) {
       full_name,
       dob,
       gender,
+      photo,
       enrollment_date,
       status,
       classification,
@@ -619,6 +622,7 @@ async function handleApi(req, res, pathname, query, body) {
         full_name = COALESCE(?, full_name),
         dob = COALESCE(?, dob),
         gender = COALESCE(?, gender),
+        photo = COALESCE(?, photo),
         enrollment_date = COALESCE(?, enrollment_date),
         status = COALESCE(?, status),
         classification = COALESCE(?, classification),
@@ -636,6 +640,7 @@ async function handleApi(req, res, pathname, query, body) {
       full_name,
       dob,
       gender,
+      photo !== undefined ? photo : current.photo,
       enrollment_date,
       status,
       classification,
@@ -662,10 +667,10 @@ async function handleApi(req, res, pathname, query, body) {
     return sendJson(res, 200, { success: true, message: 'تم تحديث بيانات الطفل بنجاح' });
   }
 
-  // Delete / Archive student
+  // Delete student completely
   if (studentMatch && method === 'DELETE') {
-    if (!hasPermission(user, 'admin')) {
-      return sendError(res, 403, 'فقط المدير يمكنه أرشفة أو حذف طفل');
+    if (!hasPermission(user, 'admin') && !hasPermission(user, 'students_edit')) {
+      return sendError(res, 403, 'فقط المدير أو صاحب الصلاحية يمكنه حذف طفل');
     }
 
     const studentId = Number(studentMatch[1]);
@@ -674,18 +679,83 @@ async function handleApi(req, res, pathname, query, body) {
       return sendError(res, 404, 'الطفل غير موجود');
     }
 
-    // Set status to withdrawn to strictly preserve financial & historical records
-    db.prepare("UPDATE students SET status = 'withdrawn', updated_at = ? WHERE id = ?").run(getCairoNow(), studentId);
+    db.exec('BEGIN IMMEDIATE TRANSACTION');
+    try {
+      // 1. Delete payment refunds for payments of this student
+      db.prepare(`
+        DELETE FROM payment_refunds
+        WHERE payment_id IN (SELECT id FROM payments WHERE student_id = ?)
+      `).run(studentId);
 
-    logAudit({
-      user,
-      action: 'STUDENT_DELETE',
-      entityType: 'student',
-      entityId: studentId,
-      details: { message: 'تم تحويل حالة الطفل إلى منسحب وحفظ السجل المالي' }
-    });
+      // 2. Delete payment allocations for payments or charges of this student
+      db.prepare(`
+        DELETE FROM payment_allocations
+        WHERE payment_id IN (SELECT id FROM payments WHERE student_id = ?)
+           OR charge_id IN (SELECT id FROM student_charges WHERE student_id = ?)
+      `).run(studentId, studentId);
 
-    return sendJson(res, 200, { success: true, message: 'تم نقل الطفل إلى قائمة المنسحبين مع الحفاظ على كافة سجلاته المالية' });
+      // 3. Delete payments
+      db.prepare('DELETE FROM payments WHERE student_id = ?').run(studentId);
+
+      // 4. Delete sessions
+      db.prepare('DELETE FROM sessions WHERE student_id = ?').run(studentId);
+
+      // 5. Delete charges
+      db.prepare('DELETE FROM student_charges WHERE student_id = ?').run(studentId);
+
+      // 6. Delete attendance
+      db.prepare('DELETE FROM attendance WHERE student_id = ?').run(studentId);
+
+      // 7. Delete guardians
+      db.prepare('DELETE FROM guardians WHERE student_id = ?').run(studentId);
+
+      // 8. Delete classification history
+      db.prepare('DELETE FROM student_classification_history WHERE student_id = ?').run(studentId);
+
+      // 9. Delete documents
+      db.prepare('DELETE FROM student_documents WHERE student_id = ?').run(studentId);
+
+      // 10. Delete progress reports
+      db.prepare('DELETE FROM progress_reports WHERE student_id = ?').run(studentId);
+
+      // 11. Disassociate communication logs
+      db.prepare('UPDATE communication_logs SET student_id = NULL WHERE student_id = ?').run(studentId);
+
+      // 12. Delete student record
+      db.prepare('DELETE FROM students WHERE id = ?').run(studentId);
+
+      // 13. Sync student_code_sequence to lowest free code (>= 1001)
+      const remainingStudents = db.prepare('SELECT code FROM students WHERE code >= 1001').all();
+      const takenCodes = new Set(remainingStudents.map(r => Number(r.code)));
+      let lowestAvailable = 1001;
+      while (takenCodes.has(lowestAvailable)) {
+        lowestAvailable++;
+      }
+      db.prepare('UPDATE student_code_sequence SET next_code = ? WHERE id = 1').run(lowestAvailable);
+
+      db.exec('COMMIT');
+
+      logAudit({
+        user,
+        action: 'STUDENT_DELETE',
+        entityType: 'student',
+        entityId: studentId,
+        details: {
+          code: current.code,
+          full_name: current.full_name,
+          message: 'تم حذف الطفل وكافة سجلاته نهائياً من النظام'
+        }
+      });
+
+      return sendJson(res, 200, {
+        success: true,
+        message: `تم حذف بيانات الطفل (${current.full_name}) نهائياً بنجاح`
+      });
+    } catch (err) {
+      db.exec('ROLLBACK');
+      console.error('Failed to delete student:', err);
+      return sendError(res, 500, 'فشل في حذف بيانات الطفل: ' + err.message);
+    }
   }
 
   // Add guardian to child
@@ -2043,6 +2113,31 @@ async function handleApi(req, res, pathname, query, body) {
     const { seedDemoData } = require('./demo_seed');
     const result = seedDemoData(user);
     return sendJson(res, 200, { success: true, message: 'تم تحميل البيانات التجريبية بنجاح', result });
+  }
+
+  // -------------------------------------------------------------------------
+  // 14. CLOUDFLARE TUNNEL & MOBILE ACCESS ENGINE
+  // -------------------------------------------------------------------------
+  if (pathname === '/api/tunnel/status' && method === 'GET') {
+    const { getTunnelStatus } = require('./tunnel');
+    return sendJson(res, 200, { success: true, ...getTunnelStatus() });
+  }
+
+  if (pathname === '/api/tunnel/start' && method === 'POST') {
+    const { startTunnel } = require('./tunnel');
+    try {
+      const port = process.env.PORT || 3000;
+      const result = await startTunnel(port);
+      return sendJson(res, 200, { success: true, ...result });
+    } catch (err) {
+      return sendError(res, 500, err.message || 'تعذر تشغيل النفق السحابي');
+    }
+  }
+
+  if (pathname === '/api/tunnel/stop' && method === 'POST') {
+    const { stopTunnel } = require('./tunnel');
+    const result = stopTunnel();
+    return sendJson(res, 200, { success: true, ...result });
   }
 
   // Unhandled API endpoint

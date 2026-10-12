@@ -7,6 +7,9 @@
     "start": "node server.js",
     "test": "node tests/test_acceptance.js"
   },
+  "engines": {
+    "node": ">=22.0.0"
+  },
   "keywords": [
     "nursery",
     "management",

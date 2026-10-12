@@ -138,6 +138,14 @@ function showToast(message, type = 'success') {
   }, 4000);
 }
 
+function escapeJsString(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/\\/g, '\\\\')
+    .replace(/'/g, "\\'")
+    .replace(/"/g, '&quot;');
+}
+
 // Modal Manager
 function openModal(title, contentHtml, onReady) {
   const container = document.getElementById('modal-container');
@@ -794,7 +802,11 @@ async function renderStudents(container) {
                 <td class="p-3.5 font-mono font-bold text-teal-700">#${s.code}</td>
                 <td class="p-3.5 font-bold text-slate-800">
                   <div class="flex items-center gap-2">
-                    <span class="text-base">${s.gender === 'أنثى' ? '👧' : '👦'}</span>
+                    ${s.photo ? `
+                      <img src="${s.photo}" class="w-8 h-8 rounded-full object-cover border border-teal-200 shadow-xs flex-shrink-0">
+                    ` : `
+                      <span class="text-base">${s.gender === 'أنثى' ? '👧' : '👦'}</span>
+                    `}
                     <span>${s.full_name}</span>
                   </div>
                 </td>
@@ -819,10 +831,13 @@ async function renderStudents(container) {
                       💵
                     </button>
                     ${s.primary_guardian_mobile ? `
-                      <button onclick="openWhatsAppReminderModal('${s.id}', '${s.full_name}', '${s.primary_guardian_name || ''}', '${s.primary_guardian_mobile}', ${s.balance})" title="مراسلة واتساب" class="p-1.5 rounded-lg bg-emerald-50 text-emerald-600 hover:bg-emerald-100 transition">
+                      <button onclick="openWhatsAppReminderModal('${s.id}', '${escapeJsString(s.full_name)}', '${escapeJsString(s.primary_guardian_name || '')}', '${s.primary_guardian_mobile}', ${s.balance})" title="مراسلة واتساب" class="p-1.5 rounded-lg bg-emerald-50 text-emerald-600 hover:bg-emerald-100 transition">
                         💬
                       </button>
                     ` : ''}
+                    <button onclick="confirmDeleteStudent(${s.id}, '${escapeJsString(s.full_name)}', '${s.code}')" title="مسح الطفل نهائياً" class="p-1.5 rounded-lg bg-rose-50 text-rose-600 hover:bg-rose-100 transition">
+                      🗑️
+                    </button>
                   </div>
                 </td>
               </tr>
@@ -853,7 +868,28 @@ async function openAddStudentModal() {
       
       <div class="bg-teal-50 border border-teal-100 rounded-2xl p-3 text-xs text-teal-800 flex items-center gap-2">
         <span>ℹ️</span>
-        <span>سيتم توليد كود الطفل الرقمي تلقائياً وبشكل تسلسلي غير مكرر يبدأ من 1001.</span>
+        <span>سيتم توليد كود الطفل الرقمي تلقائياً وبشكل تسلسلي يبدأ من 1001، وإذا تم مسح أي طفل يعود كوده شاغراً تلقائياً.</span>
+      </div>
+
+      <!-- Child Photo Selection -->
+      <div class="flex flex-col sm:flex-row items-center gap-4 p-3.5 bg-slate-50 border border-slate-200 rounded-2xl">
+        <div class="relative">
+          <div id="ast-photo-preview" class="w-20 h-20 rounded-2xl bg-white border-2 border-dashed border-teal-300 flex items-center justify-center text-4xl overflow-hidden shadow-sm text-teal-600">
+            👦
+          </div>
+          <button type="button" id="ast-photo-remove" class="hidden absolute -top-1.5 -right-1.5 w-6 h-6 bg-rose-500 hover:bg-rose-600 text-white rounded-full text-xs font-bold items-center justify-center shadow transition" title="إزالة الصورة">✕</button>
+        </div>
+        <div class="flex-1 text-center sm:text-right">
+          <div class="text-xs font-bold text-slate-800">صورة الطفل الشخصية</div>
+          <div class="text-[11px] text-slate-500 mt-0.5">يمكنك رفع صورة واضحة للطفل من جهازك أو التقاطها بالموبايل (اختياري)</div>
+          <div class="mt-2 flex items-center justify-center sm:justify-start gap-2">
+            <label class="cursor-pointer inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-teal-50 text-teal-700 hover:bg-teal-100 font-bold text-xs border border-teal-200 transition">
+              <span>📷</span>
+              <span>اختيار صورة للطفل</span>
+              <input type="file" id="ast-photo-input" accept="image/*" class="hidden">
+            </label>
+          </div>
+        </div>
       </div>
 
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -978,6 +1014,59 @@ async function openAddStudentModal() {
   `;
 
   openLargeModal('تسجيل طفل جديد بحضانة Mamy One', content, () => {
+    let studentPhotoDataUrl = null;
+    const photoInput = document.getElementById('ast-photo-input');
+    const photoPreview = document.getElementById('ast-photo-preview');
+    const photoRemove = document.getElementById('ast-photo-remove');
+    const genderSelect = document.getElementById('ast-gender');
+
+    if (photoInput) {
+      photoInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+          const img = new Image();
+          img.onload = () => {
+            const maxDim = 320;
+            let w = img.width, h = img.height;
+            if (w > maxDim || h > maxDim) {
+              if (w > h) { h = Math.round((h * maxDim) / w); w = maxDim; }
+              else { w = Math.round((w * maxDim) / h); h = maxDim; }
+            }
+            const canvas = document.createElement('canvas');
+            canvas.width = w; canvas.height = h;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, w, h);
+            studentPhotoDataUrl = canvas.toDataURL('image/jpeg', 0.85);
+            photoPreview.innerHTML = `<img src="${studentPhotoDataUrl}" class="w-full h-full object-cover">`;
+            photoRemove.classList.remove('hidden');
+            photoRemove.classList.add('flex');
+          };
+          img.src = ev.target.result;
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+
+    if (photoRemove) {
+      photoRemove.addEventListener('click', () => {
+        studentPhotoDataUrl = null;
+        if (photoInput) photoInput.value = '';
+        photoPreview.innerHTML = (genderSelect && genderSelect.value === 'أنثى') ? '👧' : '👦';
+        photoRemove.classList.add('hidden');
+        photoRemove.classList.remove('flex');
+      });
+    }
+
+    if (genderSelect) {
+      genderSelect.addEventListener('change', (e) => {
+        if (!studentPhotoDataUrl && photoPreview) {
+          photoPreview.innerHTML = e.target.value === 'أنثى' ? '👧' : '👦';
+        }
+      });
+    }
+
     const dobInput = document.getElementById('ast-dob');
     const agePreview = document.getElementById('ast-age-preview');
     dobInput.addEventListener('change', () => {
@@ -989,6 +1078,7 @@ async function openAddStudentModal() {
       const payload = {
         full_name: document.getElementById('ast-name').value.trim(),
         gender: document.getElementById('ast-gender').value,
+        photo: studentPhotoDataUrl || null,
         dob: document.getElementById('ast-dob').value,
         enrollment_date: document.getElementById('ast-enrollment').value,
         classification: document.getElementById('ast-classification').value,
@@ -1022,6 +1112,69 @@ async function openAddStudentModal() {
   });
 }
 
+// Confirmation dialog and logic for deleting a registered student
+function confirmDeleteStudent(studentId, studentName, studentCode) {
+  const safeName = studentName || 'هذا الطفل';
+  const codeTag = studentCode ? `(#${studentCode})` : '';
+
+  const content = `
+    <div class="text-center space-y-4 py-3" dir="rtl">
+      <div class="w-16 h-16 mx-auto rounded-full bg-rose-100 text-rose-600 flex items-center justify-center text-3xl shadow-inner">
+        🗑️
+      </div>
+      <div>
+        <h4 class="text-base font-black text-slate-900">هل أنت متأكد من مسح وحذف هذا الطفل؟</h4>
+        <div class="inline-block mt-2 px-3 py-1 bg-rose-50 border border-rose-200 rounded-xl">
+          <span class="text-sm font-black text-rose-700">${safeName}</span>
+          ${codeTag ? `<span class="font-mono text-xs text-rose-500 mr-1">${codeTag}</span>` : ''}
+        </div>
+        <p class="text-xs text-slate-500 mt-3 leading-relaxed max-w-sm mx-auto">
+          ⚠️ <strong>تنبيه:</strong> سيتم مسح بيانات الطفل وجميع سجلاته المرتبطة (الرسوم، الحضور، الجلسات، بيانات ولي الأمر) نهائياً من النظام. لا يمكن التراجع عن هذه الخطوة.
+        </p>
+      </div>
+      <div class="flex items-center justify-center gap-3 pt-4 border-t border-slate-100">
+        <button id="btn-confirm-delete-student" class="btn bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs py-2.5 px-6 rounded-xl transition shadow">
+          نعم، احذف الطفل نهائياً
+        </button>
+        <button onclick="closeModal()" class="btn btn-secondary text-xs py-2.5 px-5">
+          إلغاء
+        </button>
+      </div>
+    </div>
+  `;
+
+  openModal('تأكيد مسح الطفل', content, () => {
+    const btn = document.getElementById('btn-confirm-delete-student');
+    if (btn) {
+      btn.addEventListener('click', async () => {
+        btn.disabled = true;
+        btn.textContent = 'جاري المسح...';
+        try {
+          const res = await api(`/api/students/${studentId}`, { method: 'DELETE' });
+          if (res && res.success) {
+            closeModal();
+            showToast(res.message || 'تم حذف بيانات الطفل بنجاح', 'success');
+            // Refresh view
+            if (window.currentPage === 'students') {
+              renderStudents(document.getElementById('main-content'));
+            } else {
+              navigateTo('students');
+            }
+          } else {
+            showToast((res && res.error) || 'تعذر حذف الطفل', 'error');
+            btn.disabled = false;
+            btn.textContent = 'نعم، احذف الطفل نهائياً';
+          }
+        } catch (err) {
+          showToast('حدث خطأ أثناء محاولة الحذف', 'error');
+          btn.disabled = false;
+          btn.textContent = 'نعم، احذف الطفل نهائياً';
+        }
+      });
+    }
+  });
+}
+
 // Full Interactive Child Profile Modal
 async function openStudentProfileModal(studentId) {
   const res = await api(`/api/students/${studentId}`);
@@ -1044,8 +1197,14 @@ async function openStudentProfileModal(studentId) {
       
       <!-- Child Top Profile Header -->
       <div class="flex flex-col sm:flex-row items-center sm:items-start gap-4 p-4 rounded-2xl bg-gradient-to-r from-teal-50 via-slate-50 to-teal-50 border border-teal-100/80">
-        <div class="w-20 h-20 rounded-2xl bg-white border border-teal-200 shadow-sm flex items-center justify-center text-4xl">
-          ${s.gender === 'أنثى' ? '👧' : '👦'}
+        <div class="relative group">
+          <div id="profile-photo-container-${s.id}" class="w-20 h-20 rounded-2xl bg-white border border-teal-200 shadow-sm flex items-center justify-center text-4xl overflow-hidden">
+            ${s.photo ? `<img src="${s.photo}" class="w-full h-full object-cover">` : (s.gender === 'أنثى' ? '👧' : '👦')}
+          </div>
+          <label class="cursor-pointer absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-teal-600 hover:bg-teal-700 text-white flex items-center justify-center text-[11px] shadow transition" title="تغيير صورة الطفل">
+            📷
+            <input type="file" id="profile-change-photo-${s.id}" accept="image/*" class="hidden">
+          </label>
         </div>
         <div class="flex-1 text-center sm:text-right">
           <div class="flex flex-wrap items-center justify-center sm:justify-start gap-2">
@@ -1061,14 +1220,19 @@ async function openStudentProfileModal(studentId) {
             <span>📅 الالتحاق: <strong>${s.enrollment_date}</strong></span>
           </div>
         </div>
-        <div class="text-center sm:text-left">
+        <div class="text-center sm:text-left flex flex-col items-center sm:items-end">
           <div class="text-xs text-slate-500">الرصيد المستحق</div>
           <div class="text-xl font-black ${f.balance > 0 ? 'text-rose-600' : 'text-emerald-600'} mt-0.5">
             ${f.balance > 0 ? formatEGP(f.balance) : 'خالص ✓'}
           </div>
-          <button onclick="closeModal(); openAddPaymentModalForStudent(${s.id})" class="btn btn-primary text-xs py-1.5 px-3 mt-2">
-            + تسجيل دفعة
-          </button>
+          <div class="flex items-center gap-2 mt-2">
+            <button onclick="closeModal(); openAddPaymentModalForStudent(${s.id})" class="btn btn-primary text-xs py-1.5 px-3">
+              + تسجيل دفعة
+            </button>
+            <button onclick="closeModal(); confirmDeleteStudent(${s.id}, '${escapeJsString(s.full_name)}', '${s.code}')" class="px-2.5 py-1.5 rounded-xl border border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-100 font-bold text-xs transition flex items-center gap-1" title="مسح الطفل نهائياً">
+              🗑️ مسح الطفل
+            </button>
+          </div>
         </div>
       </div>
 
@@ -1204,7 +1368,48 @@ async function openStudentProfileModal(studentId) {
     </div>
   `;
 
-  openLargeModal(`ملف الطفل: ${s.full_name} (#${s.code})`, content);
+  openLargeModal(`ملف الطفل: ${s.full_name} (#${s.code})`, content, () => {
+    const changeInput = document.getElementById(`profile-change-photo-${s.id}`);
+    if (changeInput) {
+      changeInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+          const img = new Image();
+          img.onload = async () => {
+            const maxDim = 320;
+            let w = img.width, h = img.height;
+            if (w > maxDim || h > maxDim) {
+              if (w > h) { h = Math.round((h * maxDim) / w); w = maxDim; }
+              else { w = Math.round((w * maxDim) / h); h = maxDim; }
+            }
+            const canvas = document.createElement('canvas');
+            canvas.width = w; canvas.height = h;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, w, h);
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+            const updateRes = await api(`/api/students/${s.id}`, {
+              method: 'PUT',
+              body: JSON.stringify({ photo: dataUrl })
+            });
+            if (updateRes && updateRes.success) {
+              showToast('تم تحديث صورة الطفل بنجاح', 'success');
+              const container = document.getElementById(`profile-photo-container-${s.id}`);
+              if (container) container.innerHTML = `<img src="${dataUrl}" class="w-full h-full object-cover">`;
+              if (window.currentPage === 'students') {
+                renderStudents(document.getElementById('main-content'));
+              }
+            } else {
+              showToast('تعذر تحديث الصورة', 'error');
+            }
+          };
+          img.src = ev.target.result;
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+  });
 }
 
 // Print Receipt Generator (Thermal / A4)
@@ -3045,6 +3250,193 @@ document.addEventListener('DOMContentLoaded', async () => {
         loadNotifications();
       }
     });
+  }
+
+// ============================================================================
+// MOBILE ACCESS & CLOUDFLARE TUNNEL MODAL
+// ============================================================================
+async function openMobileAccessModal() {
+  const statusRes = await api('/api/tunnel/status');
+  const initialData = statusRes || { running: false, url: null, localIp: '127.0.0.1' };
+
+  function renderModalBody(data) {
+    const isRunning = !!(data && data.running && data.url);
+    const tunnelUrl = data && data.url ? data.url : '';
+    const localIp = data && data.localIp ? data.localIp : '127.0.0.1';
+    const localLink = `http://${localIp}:3000`;
+
+    return `
+      <div class="flex flex-col gap-5 text-right" id="mobile-modal-content">
+        <!-- Introduction Header -->
+        <div class="bg-gradient-to-r from-teal-50 to-emerald-50 p-4 rounded-2xl border border-teal-100 flex items-start gap-3">
+          <span class="text-2xl">📱</span>
+          <div>
+            <h4 class="font-bold text-slate-800 text-sm">الوصول للنظام من أي هاتف ذكي (Android / iPhone)</h4>
+            <p class="text-xs text-slate-600 mt-1 leading-relaxed">
+              يمكنك استخدام هاتفك لتسجيل الحضور، تسجيل الأطفال الجدد بكاميرا الموبايل، ومتابعة الحسابات والمدفوعات من أي مكان!
+            </p>
+          </div>
+        </div>
+
+        <!-- Section 1: Cloudflare Tunnel (Internet Access from anywhere) -->
+        <div class="bg-white rounded-2xl border-2 ${isRunning ? 'border-emerald-300 shadow-md shadow-emerald-50' : 'border-slate-200'} p-5 transition-all">
+          <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+            <div class="flex items-center gap-2">
+              <span class="w-8 h-8 rounded-xl ${isRunning ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'} flex items-center justify-center font-bold text-sm">🌐</span>
+              <div>
+                <h5 class="font-bold text-slate-900 text-sm">1. الرابط السحابي عبر الإنترنت (Cloudflare Tunnel)</h5>
+                <span class="text-[11px] text-slate-500">يعمل من أي مكان عبر باقة الموبايل (4G/5G) أو من المنزل</span>
+              </div>
+            </div>
+            <span class="px-2.5 py-1 rounded-full text-[11px] font-bold ${isRunning ? 'bg-emerald-100 text-emerald-800 animate-pulse' : 'bg-slate-100 text-slate-600'}">
+              ${isRunning ? '● متصل ومتاح الآن' : 'غير مفعّل'}
+            </span>
+          </div>
+
+          <div class="mt-4">
+            ${isRunning ? `
+              <div class="flex flex-col items-center gap-4">
+                <div class="w-full bg-slate-50 p-3 rounded-xl border border-slate-200 flex items-center justify-between gap-2">
+                  <span class="font-mono text-xs text-teal-800 font-bold truncate select-all" id="tunnel-url-text">${tunnelUrl}</span>
+                  <button id="btn-copy-tunnel" class="btn btn-secondary text-xs py-1.5 px-3 flex-shrink-0">
+                    📋 نسخ الرابط
+                  </button>
+                </div>
+
+                <!-- QR Code -->
+                <div class="flex flex-col items-center bg-white p-3 rounded-2xl border border-slate-200 shadow-sm">
+                  <img src="https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(tunnelUrl)}" 
+                       alt="QR Code" class="w-44 h-44 rounded-lg border border-slate-100" />
+                  <span class="text-[11px] text-slate-500 font-semibold mt-2">📷 وجّه كاميرا الموبايل نحو الكود للدخول المباشر</span>
+                </div>
+
+                <button id="btn-stop-tunnel" class="btn btn-danger text-xs py-2 w-full mt-1">
+                  ⏹️ إيقاف الرابط السحابي
+                </button>
+              </div>
+            ` : `
+              <div class="flex flex-col gap-3 py-2 text-center">
+                <p class="text-xs text-slate-600">
+                  انقر على الزر أدناه لتوليد رابط سحابي آمن ومشفّر (HTTPS) يمكنك مشاركته وفتحه من أي موبايل خارج الحضانة.
+                </p>
+                <button id="btn-start-tunnel" class="btn btn-primary text-sm py-2.5 w-full flex items-center justify-center gap-2 shadow-md">
+                  <span>🚀</span> <span>تفعيل الرابط السحابي الآن (Cloudflare)</span>
+                </button>
+              </div>
+            `}
+          </div>
+        </div>
+
+        <!-- Section 2: Local Wi-Fi Network Access -->
+        <div class="bg-white rounded-2xl border border-slate-200 p-5">
+          <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+            <div class="flex items-center gap-2">
+              <span class="w-8 h-8 rounded-xl bg-teal-50 text-teal-600 flex items-center justify-center font-bold text-sm">📶</span>
+              <div>
+                <h5 class="font-bold text-slate-900 text-sm">2. عبر شبكة الواي فاي المحلية (Wi-Fi)</h5>
+                <span class="text-[11px] text-slate-500">يعمل بدون إنترنت عندما يكون الموبايل واللابتوب على نفس الراوتر</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="mt-4 flex flex-col gap-3">
+            <div class="w-full bg-slate-50 p-3 rounded-xl border border-slate-200 flex items-center justify-between gap-2">
+              <span class="font-mono text-xs text-slate-800 font-bold select-all" id="local-url-text">${localLink}</span>
+              <button id="btn-copy-local" class="btn btn-secondary text-xs py-1.5 px-3 flex-shrink-0">
+                📋 نسخ
+              </button>
+            </div>
+            <p class="text-[11px] text-slate-500 leading-relaxed">
+              💡 <strong>ملاحظة:</strong> افتح متصفح هاتفك واكتب الرابط أعلاه، وسيفتح البرنامج فوراً وبشكل محلي فائق السرعة.
+            </p>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  function attachModalEvents(currentData) {
+    // Copy Tunnel URL
+    const copyTunnelBtn = document.getElementById('btn-copy-tunnel');
+    if (copyTunnelBtn && currentData.url) {
+      copyTunnelBtn.addEventListener('click', () => {
+        navigator.clipboard.writeText(currentData.url);
+        copyTunnelBtn.innerText = 'تم النسخ ✓';
+        setTimeout(() => { copyTunnelBtn.innerText = '📋 نسخ الرابط'; }, 2000);
+        showToast('تم نسخ الرابط السحابي بنجاح', 'success');
+      });
+    }
+
+    // Copy Local URL
+    const copyLocalBtn = document.getElementById('btn-copy-local');
+    if (copyLocalBtn && currentData.localIp) {
+      copyLocalBtn.addEventListener('click', () => {
+        const url = `http://${currentData.localIp}:3000`;
+        navigator.clipboard.writeText(url);
+        copyLocalBtn.innerText = 'تم النسخ ✓';
+        setTimeout(() => { copyLocalBtn.innerText = '📋 نسخ'; }, 2000);
+        showToast('تم نسخ رابط الواي فاي بنجاح', 'success');
+      });
+    }
+
+    // Start Tunnel Button
+    const startBtn = document.getElementById('btn-start-tunnel');
+    if (startBtn) {
+      startBtn.addEventListener('click', async () => {
+        startBtn.disabled = true;
+        startBtn.innerHTML = `
+          <span class="inline-block animate-spin ml-2">⏳</span>
+          <span>جاري الاتصال بـ Cloudflare وتوليد الرابط الآمن...</span>
+        `;
+        try {
+          const res = await api('/api/tunnel/start', { method: 'POST' });
+          if (res && res.success && res.url) {
+            showToast('تم تفعيل الرابط السحابي بنجاح! 🚀', 'success');
+            const contentDiv = document.querySelector('.modal-content > div:nth-child(2)');
+            if (contentDiv) {
+              contentDiv.innerHTML = renderModalBody(res);
+              attachModalEvents(res);
+            }
+          } else {
+            showToast(res && res.error ? res.error : 'فشل بدء النفق السحابي', 'error');
+            startBtn.disabled = false;
+            startBtn.innerHTML = `<span>🚀</span> <span>تفعيل الرابط السحابي الآن (Cloudflare)</span>`;
+          }
+        } catch (e) {
+          showToast('حدث خطأ أثناء محاولة الاتصال', 'error');
+          startBtn.disabled = false;
+          startBtn.innerHTML = `<span>🚀</span> <span>تفعيل الرابط السحابي الآن (Cloudflare)</span>`;
+        }
+      });
+    }
+
+    // Stop Tunnel Button
+    const stopBtn = document.getElementById('btn-stop-tunnel');
+    if (stopBtn) {
+      stopBtn.addEventListener('click', async () => {
+        stopBtn.disabled = true;
+        stopBtn.innerText = 'جاري الإيقاف...';
+        await api('/api/tunnel/stop', { method: 'POST' });
+        showToast('تم إيقاف الرابط السحابي بنجاح', 'info');
+        const contentDiv = document.querySelector('.modal-content > div:nth-child(2)');
+        if (contentDiv) {
+          const updated = { running: false, url: null, localIp: currentData.localIp };
+          contentDiv.innerHTML = renderModalBody(updated);
+          attachModalEvents(updated);
+        }
+      });
+    }
+  }
+
+  openModal('📱 تشغيل النظام على الموبايل (عبر الإنترنت أو الواي فاي)', renderModalBody(initialData), () => {
+    attachModalEvents(initialData);
+  });
+}
+
+  // Mobile Access Modal Button
+  const mobileBtn = document.getElementById('btn-mobile-access');
+  if (mobileBtn) {
+    mobileBtn.addEventListener('click', openMobileAccessModal);
   }
 
   // Start Application
