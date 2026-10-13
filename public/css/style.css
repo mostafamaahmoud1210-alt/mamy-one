@@ -246,3 +246,85 @@ body {
     opacity: 1;
   }
 }
+
+/* ========================================================
+   STUDENT ID CARD DESIGNER & GENERATOR STYLES
+   ======================================================== */
+.student-card-frame {
+  position: relative;
+  width: 100%;
+  max-width: 520px;
+  aspect-ratio: 85.6 / 54;
+  border-radius: 1.5rem;
+  overflow: hidden;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.08);
+  transition: all 0.25s ease;
+  user-select: none;
+}
+
+/* Themes */
+.student-card-frame.theme-warm-pastel {
+  background-color: #fbf8f1;
+  border: 2px solid #e5dbcb;
+  color: #3b3026;
+}
+.student-card-frame.theme-warm-pastel .card-accent-shape-1 { background-color: #eee1ce; }
+.student-card-frame.theme-warm-pastel .card-accent-shape-2 { background-color: #cfe0cf; }
+.student-card-frame.theme-warm-pastel .card-photo-box { background-color: #ede3d3; border-color: #c4b59d; }
+
+.student-card-frame.theme-mamy-teal {
+  background-color: #f0fdfa;
+  border: 2px solid #99f6e4;
+  color: #134e4a;
+}
+.student-card-frame.theme-mamy-teal .card-accent-shape-1 { background-color: #ccfbf1; }
+.student-card-frame.theme-mamy-teal .card-accent-shape-2 { background-color: #a7f3d0; }
+.student-card-frame.theme-mamy-teal .card-photo-box { background-color: #e6fffa; border-color: #5eead4; }
+
+.student-card-frame.theme-princess-pink {
+  background-color: #fff1f2;
+  border: 2px solid #fecdd3;
+  color: #881337;
+}
+.student-card-frame.theme-princess-pink .card-accent-shape-1 { background-color: #ffe4e6; }
+.student-card-frame.theme-princess-pink .card-accent-shape-2 { background-color: #fce7f3; }
+.student-card-frame.theme-princess-pink .card-photo-box { background-color: #ffe4e6; border-color: #fda4af; }
+
+.student-card-frame.theme-royal-blue {
+  background-color: #eff6ff;
+  border: 2px solid #bfdbfe;
+  color: #1e3a8a;
+}
+.student-card-frame.theme-royal-blue .card-accent-shape-1 { background-color: #dbeafe; }
+.student-card-frame.theme-royal-blue .card-accent-shape-2 { background-color: #e0e7ff; }
+.student-card-frame.theme-royal-blue .card-photo-box { background-color: #e0f2fe; border-color: #93c5fd; }
+
+/* Print rules specific to card */
+@media print {
+  body.printing-student-card * {
+    visibility: hidden !important;
+  }
+  body.printing-student-card #student-id-card-print-target,
+  body.printing-student-card #student-id-card-print-target * {
+    visibility: visible !important;
+  }
+  body.printing-student-card #student-id-card-print-target {
+    position: fixed !important;
+    left: 50% !important;
+    top: 25mm !important;
+    transform: translateX(-50%) !important;
+    width: 85.6mm !important;
+    height: 54mm !important;
+    max-width: 85.6mm !important;
+    max-height: 54mm !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    box-shadow: none !important;
+    border: 1px dashed #cbd5e1 !important;
+    border-radius: 4mm !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    page-break-inside: avoid !important;
+  }
+}
+

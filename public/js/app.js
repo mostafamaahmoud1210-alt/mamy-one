@@ -768,7 +768,10 @@ async function renderStudents(container) {
         </h2>
         <p class="text-xs text-slate-500">إجمالي الأطفال المسجلين: <strong class="text-teal-600">${students.length}</strong> طفل</p>
       </div>
-      <div class="flex items-center gap-3">
+      <div class="flex items-center gap-2">
+        <button id="btn-card-designer-page" class="px-3 py-2 rounded-xl border border-teal-200 bg-teal-50 hover:bg-teal-100 text-teal-800 text-xs font-bold transition flex items-center gap-1.5 shadow-xs">
+          <span>🪪</span> <span>مصمم كارنيهات الأطفال</span>
+        </button>
         <button id="btn-add-student-page" class="btn btn-primary text-xs font-bold">
           <span>+</span> <span>تسجيل طفل جديد</span>
         </button>
@@ -812,6 +815,10 @@ async function renderStudents(container) {
   `;
 
   document.getElementById('btn-add-student-page').addEventListener('click', openAddStudentModal);
+  const cardDesignerBtn = document.getElementById('btn-card-designer-page');
+  if (cardDesignerBtn) {
+    cardDesignerBtn.addEventListener('click', () => openStudentIdCardModal());
+  }
 
   // Filter Logic
   function filterStudents() {
@@ -887,6 +894,9 @@ async function renderStudents(container) {
                   <div class="flex items-center justify-center gap-1.5">
                     <button onclick="openStudentProfileModal(${s.id})" class="px-2.5 py-1.5 rounded-lg bg-teal-50 text-teal-700 hover:bg-teal-100 font-bold transition">
                       الملف الشامل
+                    </button>
+                    <button onclick="openStudentIdCardModal(${s.id})" title="تصميم وطباعة كارنيه الطفل" class="p-1.5 rounded-lg bg-amber-50 text-amber-700 hover:bg-amber-100 transition font-bold">
+                      🪪
                     </button>
                     <button onclick="openAddPaymentModalForStudent(${s.id})" title="تسجيل دفعة" class="p-1.5 rounded-lg bg-emerald-50 text-emerald-600 hover:bg-emerald-100 transition">
                       💵
@@ -1272,6 +1282,9 @@ async function openStudentProfileModal(studentId) {
             <button onclick="closeModal(); openAddPaymentModalForStudent(${s.id})" class="btn btn-primary text-xs py-1.5 px-3">
               + تسجيل دفعة
             </button>
+            <button onclick="openStudentIdCardModal(${s.id})" class="px-2.5 py-1.5 rounded-xl border border-teal-200 bg-teal-50 text-teal-800 hover:bg-teal-100 font-bold text-xs transition flex items-center gap-1 shadow-xs" title="تصميم وطباعة كارنيه الطفل">
+              🪪 كارنيه الطفل
+            </button>
             <button onclick="closeModal(); confirmDeleteStudent(${s.id}, '${escapeJsString(s.full_name)}', '${s.code}')" class="px-2.5 py-1.5 rounded-xl border border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-100 font-bold text-xs transition flex items-center gap-1" title="مسح الطفل نهائياً">
               🗑️ مسح الطفل
             </button>
@@ -1452,7 +1465,1094 @@ async function openStudentProfileModal(studentId) {
         reader.readAsDataURL(file);
       });
     }
+}
+
+// ========================================================
+// STUDENT ID CARD DESIGNER & GENERATOR (كارنيه الطفل التفاعلي)
+// ========================================================
+async function openStudentIdCardModal(initialStudentId = null) {
+  // 1. Fetch students list for dropdown
+  const res = await api('/api/students');
+  const students = (res && res.success && res.students) ? res.students : [];
+
+  let selectedStudent = null;
+  if (initialStudentId) {
+    selectedStudent = students.find(s => s.id === Number(initialStudentId)) || null;
+  }
+  if (!selectedStudent && students.length > 0) {
+    selectedStudent = students[0];
+  }
+
+  // Card reactive state
+  const cardState = {
+    studentId: selectedStudent ? selectedStudent.id : null,
+    nurseryTitlePart1: 'حضانة',
+    nurseryTitlePart2: 'مامي وان',
+    name: selectedStudent ? selectedStudent.full_name : 'سيف أحمد مصطفى',
+    code: selectedStudent ? (String(selectedStudent.code).startsWith('#') ? selectedStudent.code : `#${selectedStudent.code}`) : '#1001',
+    mobile: selectedStudent ? (selectedStudent.primary_guardian_mobile || '') : '01012345678',
+    extraLabel: 'ملاحظات:',
+    extraValue: selectedStudent ? (selectedStudent.medical_notes || '') : '',
+    photo: selectedStudent ? (selectedStudent.photo || null) : null,
+    tempUploadedPhoto: null,
+    theme: 'theme-warm-pastel',
+    showTreeSun: true,
+    showWatermark: true,
+    showQr: false
+  };
+
+  const modalHtml = `
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+      
+      <!-- ================= LEFT COLUMN: LIVE CARD PREVIEW & ACTIONS ================= -->
+      <div class="lg:col-span-7 flex flex-col items-center gap-4">
+        
+        <!-- Preview Box Header -->
+        <div class="w-full flex items-center justify-between px-1">
+          <div class="flex items-center gap-2">
+            <span class="text-xs font-bold text-slate-700">معاينة الكارنيه المباشرة (CR-80)</span>
+            <span class="text-[10px] bg-teal-100 text-teal-800 font-bold px-2 py-0.5 rounded-full">جاهز للطباعة والتحميل</span>
+          </div>
+          <button id="btn-card-reset-fields" class="text-[11px] text-slate-400 hover:text-slate-700 underline">إعادة ضبط</button>
+        </div>
+
+        <!-- THE ACTUAL CARD FRAME (SCREEN PREVIEW) -->
+        <div id="card-live-preview" class="student-card-frame theme-warm-pastel relative p-5 sm:p-6 flex flex-col justify-between overflow-hidden shadow-2xl border">
+          <!-- Background Corner Shapes -->
+          <div class="card-accent-shape-1 absolute -top-10 -left-10 w-32 h-32 rounded-full opacity-60 pointer-events-none"></div>
+          <div class="absolute top-2.5 left-3.5 text-emerald-700/60 text-xs pointer-events-none select-none">🌿</div>
+          
+          <div class="card-accent-shape-2 absolute -bottom-12 -right-12 w-36 h-36 rounded-full opacity-50 pointer-events-none"></div>
+          <div class="absolute bottom-2.5 right-4 text-emerald-700/60 text-xs pointer-events-none select-none">🌿</div>
+          
+          <!-- Delicate Sparkles/Stars -->
+          <div class="absolute top-3.5 right-28 text-amber-500/40 text-[10px] pointer-events-none">✦</div>
+          <div class="absolute bottom-6 left-40 text-amber-500/40 text-[10px] pointer-events-none">✦</div>
+          <div class="absolute top-16 left-3 text-slate-400/40 text-[10px] pointer-events-none">⋆</div>
+
+          <!-- TOP HEADER -->
+          <div class="relative z-10 flex items-center justify-between pb-2 border-b border-[#8b572a]/15">
+            <!-- Left: Logo + Nursery Name -->
+            <div class="flex items-center gap-2.5">
+              <img src="/images/logo.png" alt="Logo" class="w-11 h-11 rounded-xl object-cover shadow-xs border border-amber-200/80 bg-white flex-shrink-0">
+              <div>
+                <div class="text-base sm:text-lg font-black tracking-tight leading-tight">
+                  <span id="preview-nursery-p1" class="text-[#1e3a5f]">حضانة</span>
+                  <span id="preview-nursery-p2" class="text-[#8b572a]">مامي وان</span>
+                </div>
+                <div class="text-[9px] text-slate-500 font-semibold leading-none mt-0.5">مركز تخاطب وتنمية مهارات</div>
+              </div>
+            </div>
+
+            <!-- Right: Tree & Sun Cartoon (toggleable) -->
+            <div id="preview-tree-sun-box" class="flex items-center flex-shrink-0">
+              <svg viewBox="0 0 100 85" class="w-14 h-12 sm:w-16 sm:h-14 drop-shadow-xs">
+                <!-- Sun -->
+                <circle cx="68" cy="24" r="14" fill="#fde68a" stroke="#f59e0b" stroke-width="1.5" />
+                <path d="M68 5 v3 M68 40 v3 M49 24 h3 M84 24 h3 M54 10 l3 3 M79 35 l3 3 M54 38 l3 -3 M79 13 l3 -3" stroke="#f59e0b" stroke-width="1.5" stroke-linecap="round" />
+                <!-- Tree Trunk -->
+                <path d="M42 42 Q44 62 38 78 L48 78 Q45 62 46 42 Z" fill="#8d6e63" stroke="#5d4037" stroke-width="1.5" />
+                <path d="M42 56 Q49 52 53 54" stroke="#5d4037" stroke-width="1.5" fill="none" stroke-linecap="round" />
+                <!-- Tree Canopy -->
+                <path d="M26 48 C18 46 16 34 24 28 C22 18 34 14 42 20 C48 12 62 14 64 23 C72 24 74 36 68 44 C72 52 62 60 52 56 C46 62 32 60 26 48 Z" fill="#a7d7b5" stroke="#4a7c59" stroke-width="1.8" />
+                <!-- Grass -->
+                <path d="M32 78 Q43 76 54 78" stroke="#4a7c59" stroke-width="1.5" stroke-linecap="round" />
+              </svg>
+            </div>
+          </div>
+
+          <!-- CARD BODY -->
+          <div class="relative z-10 flex items-center gap-4 sm:gap-6 flex-1 py-2">
+            
+            <!-- Left: Photo Frame with Dashed Border -->
+            <div class="card-photo-box w-24 h-28 sm:w-28 sm:h-32 rounded-2xl border-2 border-dashed flex flex-col items-center justify-center p-1 relative flex-shrink-0 shadow-inner overflow-hidden">
+              <div id="preview-photo-holder" class="w-full h-full flex flex-col items-center justify-center">
+                <!-- Dynamically rendered -->
+              </div>
+            </div>
+
+            <!-- Right: Text Fields with Watermark -->
+            <div class="flex-1 min-w-0 relative flex flex-col justify-center py-1">
+              
+              <!-- Faint Watermark Logo -->
+              <div id="preview-watermark-logo" class="absolute inset-0 flex items-center justify-center opacity-10 pointer-events-none select-none">
+                <img src="/images/logo.png" class="w-28 h-28 object-contain">
+              </div>
+              
+              <!-- Faint Watermark Text "MAMY ONE" -->
+              <div id="preview-watermark-text" class="absolute bottom-1 left-0 right-0 text-center font-black text-xs sm:text-sm tracking-[0.25em] text-[#8b572a] opacity-20 pointer-events-none select-none">
+                MAMY ONE
+              </div>
+
+              <!-- Field 1: اسم الطفل -->
+              <div class="relative z-10 mb-2.5">
+                <div class="flex items-baseline gap-2">
+                  <span class="text-xs sm:text-sm font-black text-[#3d2f25] whitespace-nowrap">اسم الطفل:</span>
+                  <span id="preview-student-name" class="text-xs sm:text-sm font-black text-[#1e293b] truncate flex-1">
+                    ${cardState.name}
+                  </span>
+                </div>
+                <div class="border-b-2 border-dotted border-[#8b572a]/50 w-full mt-0.5"></div>
+              </div>
+
+              <!-- Field 2: كود الطفل -->
+              <div class="relative z-10 mb-2.5">
+                <div class="flex items-baseline gap-2">
+                  <span class="text-xs sm:text-sm font-black text-[#3d2f25] whitespace-nowrap">كود الطفل:</span>
+                  <span id="preview-student-code" class="text-xs sm:text-sm font-black text-teal-700 font-mono truncate flex-1">
+                    ${cardState.code}
+                  </span>
+                </div>
+                <div class="border-b-2 border-dotted border-[#8b572a]/50 w-full mt-0.5"></div>
+              </div>
+
+              <!-- Field 3: رقم ولي الأمر -->
+              <div class="relative z-10 mb-1">
+                <div class="flex items-baseline gap-2">
+                  <span class="text-xs sm:text-sm font-black text-[#3d2f25] whitespace-nowrap">رقم ولي الأمر:</span>
+                  <span id="preview-student-mobile" class="text-xs sm:text-sm font-black text-[#1e293b] font-mono truncate flex-1" dir="ltr">
+                    ${cardState.mobile || '-'}
+                  </span>
+                </div>
+                <div class="border-b-2 border-dotted border-[#8b572a]/50 w-full mt-0.5"></div>
+              </div>
+
+              <!-- Field 4: سطر إضافي اختياري -->
+              <div id="preview-extra-row" class="relative z-10 ${cardState.extraValue ? '' : 'hidden'} mt-1">
+                <div class="flex items-baseline gap-2">
+                  <span id="preview-extra-label" class="text-[11px] font-bold text-[#3d2f25] whitespace-nowrap">${cardState.extraLabel}</span>
+                  <span id="preview-extra-val" class="text-[11px] font-bold text-slate-700 truncate flex-1">${cardState.extraValue}</span>
+                </div>
+                <div class="border-b-2 border-dotted border-[#8b572a]/40 w-full mt-0.5"></div>
+              </div>
+
+            </div>
+
+          </div>
+
+          <!-- FOOTER -->
+          <div class="relative z-10 flex items-center justify-between pt-1 border-t border-[#8b572a]/15 text-[9px] text-[#6b5849]/80 font-medium">
+            <span>نظام مامي وان لإدارة الحضانات • MAMY ONE</span>
+            <span id="preview-qr-badge" class="${cardState.showQr ? '' : 'hidden'} font-mono font-bold text-[8px] bg-white/70 px-1 py-0.5 rounded border border-[#8b572a]/20">ID VERIFIED ✓</span>
+          </div>
+
+        </div>
+
+        <!-- ACTIONS BAR BELOW PREVIEW -->
+        <div class="w-full flex flex-wrap items-center justify-center gap-2 pt-2">
+          
+          <!-- Print Button -->
+          <button id="btn-card-print" class="btn btn-primary text-xs py-2 px-4 shadow-sm flex items-center gap-2 font-bold cursor-pointer">
+            <span>🖨️</span> <span>طباعة الكارنيه فوراً</span>
+          </button>
+          
+          <!-- Download PNG Button -->
+          <button id="btn-card-download-png" class="btn btn-secondary text-xs py-2 px-4 shadow-sm flex items-center gap-2 font-bold cursor-pointer">
+            <span>📥</span> <span>تحميل صورة عالية الدقة (PNG)</span>
+          </button>
+
+          <!-- Save Photo to Profile Button (if uploaded) -->
+          <button id="btn-card-save-photo" class="hidden px-3 py-2 rounded-xl bg-teal-50 border border-teal-200 text-teal-700 hover:bg-teal-100 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs">
+            <span>💾</span> <span>حفظ الصورة لملف الطفل</span>
+          </button>
+
+          <!-- Send WhatsApp to Parent -->
+          <button id="btn-card-whatsapp" class="px-3 py-2 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 hover:bg-emerald-100 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs" title="إرسال بيانات الكارنيه لواتساب ولي الأمر">
+            <span>💬</span> <span>واتساب ولي الأمر</span>
+          </button>
+
+        </div>
+
+      </div>
+
+      <!-- ================= RIGHT COLUMN: LIVE EDIT CONTROLS ================= -->
+      <div class="lg:col-span-5 flex flex-col gap-4 bg-slate-50/70 p-4 rounded-2xl border border-slate-200/80 text-xs">
+        
+        <!-- 1. Select Student Dropdown -->
+        <div>
+          <label class="block font-bold text-slate-800 mb-1 flex items-center justify-between">
+            <span>👶 اختيار الطفل المسجل</span>
+            <span class="text-[10px] text-teal-600 font-normal">يملأ البيانات تلقائياً</span>
+          </label>
+          <select id="card-input-student-select" class="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white font-medium text-xs text-slate-700 outline-none focus:border-teal-500">
+            <option value="custom">✨ طفل مخصص / كتابة يدوية حرة</option>
+            ${students.map(s => `
+              <option value="${s.id}" ${selectedStudent && selectedStudent.id === s.id ? 'selected' : ''}>
+                #${s.code} - ${s.full_name} (${s.primary_guardian_mobile || 'بدون هاتف'})
+              </option>
+            `).join('')}
+          </select>
+        </div>
+
+        <!-- 2. Live Editable Fields -->
+        <div class="space-y-3 pt-1 border-t border-slate-200/60">
+          <div class="font-bold text-slate-800 text-[11px] flex items-center gap-1">
+            <span>✏️</span> <span>تعديل النصوص مباشرة على الكارنيه</span>
+          </div>
+
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="block text-[11px] text-slate-600 mb-0.5">عنوان الترويسة 1</label>
+              <input type="text" id="card-input-title-p1" value="${cardState.nurseryTitlePart1}" class="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-xs outline-none focus:border-teal-500 font-bold">
+            </div>
+            <div>
+              <label class="block text-[11px] text-slate-600 mb-0.5">عنوان الترويسة 2</label>
+              <input type="text" id="card-input-title-p2" value="${cardState.nurseryTitlePart2}" class="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-xs outline-none focus:border-teal-500 font-bold text-amber-800">
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-[11px] text-slate-600 mb-0.5">اسم الطفل بالكامل</label>
+            <input type="text" id="card-input-name" value="${cardState.name}" class="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-800 outline-none focus:border-teal-500">
+          </div>
+
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="block text-[11px] text-slate-600 mb-0.5">كود الطفل</label>
+              <input type="text" id="card-input-code" value="${cardState.code}" class="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-xs font-mono font-bold text-teal-700 outline-none focus:border-teal-500">
+            </div>
+            <div>
+              <label class="block text-[11px] text-slate-600 mb-0.5">رقم ولي الأمر</label>
+              <input type="text" id="card-input-mobile" value="${cardState.mobile}" class="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-xs font-mono font-bold text-slate-800 outline-none focus:border-teal-500" dir="ltr">
+            </div>
+          </div>
+
+          <div class="grid grid-cols-3 gap-2">
+            <div class="col-span-1">
+              <label class="block text-[11px] text-slate-600 mb-0.5">عنوان إضافي</label>
+              <input type="text" id="card-input-extra-label" value="${cardState.extraLabel}" class="w-full px-2 py-1.5 rounded-lg border border-slate-200 bg-white text-xs outline-none focus:border-teal-500" placeholder="مثال: فصيلة الدم">
+            </div>
+            <div class="col-span-2">
+              <label class="block text-[11px] text-slate-600 mb-0.5">قيمة البيان الإضافي</label>
+              <input type="text" id="card-input-extra-val" value="${cardState.extraValue}" class="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-xs outline-none focus:border-teal-500" placeholder="مثال: +O أو تاريخ الميلاد">
+            </div>
+          </div>
+        </div>
+
+        <!-- 3. Photo Controls -->
+        <div class="space-y-2 pt-2 border-t border-slate-200/60">
+          <div class="font-bold text-slate-800 text-[11px] flex items-center justify-between">
+            <span>📷 صورة الطفل في الكارنيه</span>
+            <span id="photo-status-badge" class="text-[10px] text-teal-600"></span>
+          </div>
+
+          <div class="flex items-center gap-2">
+            <label class="btn btn-secondary text-xs py-1.5 px-3 cursor-pointer flex-1 justify-center shadow-xs">
+              <span>📤 رفع صورة جديدة</span>
+              <input type="file" id="card-input-upload-photo" accept="image/*" class="hidden">
+            </label>
+            <button type="button" id="btn-card-use-system-photo" class="px-2.5 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 text-xs font-bold cursor-pointer" title="استخدام صورة الطفل المسجلة">
+              صورة الطفل
+            </button>
+            <button type="button" id="btn-card-reset-photo" class="px-2.5 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 text-xs font-bold cursor-pointer" title="إعادة تعيين إلى الرسم الكارتوني">
+              افتراضي
+            </button>
+          </div>
+        </div>
+
+        <!-- 4. Themes & Color Palette -->
+        <div class="space-y-2 pt-2 border-t border-slate-200/60">
+          <div class="font-bold text-slate-800 text-[11px]">🎨 ألوان وثيم الكارنيه</div>
+          <div class="grid grid-cols-2 gap-2">
+            <button type="button" data-theme="theme-warm-pastel" class="theme-select-btn px-2.5 py-1.5 rounded-xl border-2 border-amber-300 bg-[#fbf8f1] text-[#3b3026] font-bold text-xs flex items-center justify-center gap-1.5 shadow-xs cursor-pointer">
+              <span>🌾</span> <span>الأصلي الدافئ</span>
+            </button>
+            <button type="button" data-theme="theme-mamy-teal" class="theme-select-btn px-2.5 py-1.5 rounded-xl border border-slate-200 bg-[#f0fdfa] text-[#134e4a] font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer">
+              <span>💎</span> <span>تركواز مامي وان</span>
+            </button>
+            <button type="button" data-theme="theme-princess-pink" class="theme-select-btn px-2.5 py-1.5 rounded-xl border border-slate-200 bg-[#fff1f2] text-[#881337] font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer">
+              <span>🌸</span> <span>وردي الأميرات</span>
+            </button>
+            <button type="button" data-theme="theme-royal-blue" class="theme-select-btn px-2.5 py-1.5 rounded-xl border border-slate-200 bg-[#eff6ff] text-[#1e3a8a] font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer">
+              <span>🌊</span> <span>أزرق ملكي سماوي</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- 5. Toggles -->
+        <div class="space-y-2 pt-2 border-t border-slate-200/60">
+          <div class="font-bold text-slate-800 text-[11px]">⚙️ خيارات ومكونات التصميم</div>
+          
+          <label class="flex items-center justify-between cursor-pointer">
+            <span class="text-slate-600 text-xs">الشجرة والشمس الكارتونية (أعلى اليمين)</span>
+            <input type="checkbox" id="card-toggle-tree-sun" checked class="w-4 h-4 rounded text-teal-600 accent-teal-600 cursor-pointer">
+          </label>
+
+          <label class="flex items-center justify-between cursor-pointer">
+            <span class="text-slate-600 text-xs">العلامة المائية في الخلفية (MAMY ONE)</span>
+            <input type="checkbox" id="card-toggle-watermark" checked class="w-4 h-4 rounded text-teal-600 accent-teal-600 cursor-pointer">
+          </label>
+
+          <label class="flex items-center justify-between cursor-pointer">
+            <span class="text-slate-600 text-xs">رمز التحقق الذكي (ID Verified)</span>
+            <input type="checkbox" id="card-toggle-qr" class="w-4 h-4 rounded text-teal-600 accent-teal-600 cursor-pointer">
+          </label>
+        </div>
+
+      </div>
+
+    </div>
+  `;
+
+  openLargeModal('🪪 مصمم ومولد كارنيهات الأطفال (Student ID Card)', modalHtml, () => {
+    
+    // Live preview updater function
+    function updateCardPhotoHolder() {
+      const holder = document.getElementById('preview-photo-holder');
+      if (!holder) return;
+      if (cardState.photo) {
+        holder.innerHTML = `<img src="${cardState.photo}" class="w-full h-full object-cover rounded-xl shadow-xs">`;
+      } else {
+        holder.innerHTML = `
+          <div class="flex flex-col items-center justify-center text-center p-1 select-none pointer-events-none">
+            <svg viewBox="0 0 100 100" class="w-11 h-11 sm:w-12 sm:h-12 drop-shadow-xs">
+              <circle cx="50" cy="50" r="38" fill="#f8e7d5" stroke="#8b572a" stroke-width="3" />
+              <circle cx="12" cy="50" r="8" fill="#f8e7d5" stroke="#8b572a" stroke-width="3" />
+              <circle cx="88" cy="50" r="8" fill="#f8e7d5" stroke="#8b572a" stroke-width="3" />
+              <circle cx="32" cy="56" r="6" fill="#fbcfe8" opacity="0.75" />
+              <circle cx="68" cy="56" r="6" fill="#fbcfe8" opacity="0.75" />
+              <circle cx="36" cy="46" r="4" fill="#3b2f25" />
+              <circle cx="64" cy="46" r="4" fill="#3b2f25" />
+              <path d="M30 38 Q36 34 42 38" stroke="#8b572a" stroke-width="2.5" fill="none" stroke-linecap="round" />
+              <path d="M58 38 Q64 34 70 38" stroke="#8b572a" stroke-width="2.5" fill="none" stroke-linecap="round" />
+              <path d="M40 60 Q50 68 60 60" stroke="#8b572a" stroke-width="3" fill="none" stroke-linecap="round" />
+              <path d="M50 14 Q53 7 57 11 Q54 18 50 14" fill="#8b572a" />
+            </svg>
+            <span class="text-[10px] font-black text-[#8b572a] mt-0.5 tracking-tight">صورة الطفل</span>
+          </div>
+        `;
+      }
+    }
+
+    function updateCardPreview() {
+      // Titles
+      const p1 = document.getElementById('preview-nursery-p1');
+      const p2 = document.getElementById('preview-nursery-p2');
+      if (p1) p1.textContent = cardState.nurseryTitlePart1 || '';
+      if (p2) p2.textContent = cardState.nurseryTitlePart2 || '';
+
+      // Fields
+      const nameEl = document.getElementById('preview-student-name');
+      const codeEl = document.getElementById('preview-student-code');
+      const mobEl = document.getElementById('preview-student-mobile');
+      if (nameEl) nameEl.textContent = cardState.name || 'بدون اسم';
+      if (codeEl) codeEl.textContent = cardState.code || '#-';
+      if (mobEl) mobEl.textContent = cardState.mobile || '-';
+
+      // Extra row
+      const extraRow = document.getElementById('preview-extra-row');
+      const extraLabelEl = document.getElementById('preview-extra-label');
+      const extraValEl = document.getElementById('preview-extra-val');
+      if (extraRow && extraLabelEl && extraValEl) {
+        if (cardState.extraValue) {
+          extraLabelEl.textContent = cardState.extraLabel || 'ملاحظات:';
+          extraValEl.textContent = cardState.extraValue;
+          extraRow.classList.remove('hidden');
+        } else {
+          extraRow.classList.add('hidden');
+        }
+      }
+
+      // Toggles
+      const treeBox = document.getElementById('preview-tree-sun-box');
+      if (treeBox) {
+        if (cardState.showTreeSun) treeBox.classList.remove('hidden');
+        else treeBox.classList.add('hidden');
+      }
+
+      const wmLogo = document.getElementById('preview-watermark-logo');
+      const wmWm = document.getElementById('preview-watermark-text');
+      if (wmLogo && wmWm) {
+        if (cardState.showWatermark) {
+          wmLogo.classList.remove('hidden');
+          wmWm.classList.remove('hidden');
+        } else {
+          wmLogo.classList.add('hidden');
+          wmWm.classList.add('hidden');
+        }
+      }
+
+      const qrBadge = document.getElementById('preview-qr-badge');
+      if (qrBadge) {
+        if (cardState.showQr) qrBadge.classList.remove('hidden');
+        else qrBadge.classList.add('hidden');
+      }
+
+      // Theme
+      const previewCard = document.getElementById('card-live-preview');
+      if (previewCard) {
+        previewCard.className = `student-card-frame ${cardState.theme} relative p-5 sm:p-6 flex flex-col justify-between overflow-hidden shadow-2xl border`;
+      }
+
+      // Photo
+      updateCardPhotoHolder();
+
+      // Save photo button visibility
+      const savePhotoBtn = document.getElementById('btn-card-save-photo');
+      if (savePhotoBtn) {
+        if (cardState.tempUploadedPhoto && cardState.studentId) {
+          savePhotoBtn.classList.remove('hidden');
+        } else {
+          savePhotoBtn.classList.add('hidden');
+        }
+      }
+    }
+
+    // Initial render
+    updateCardPreview();
+
+    // 1. Student select dropdown
+    const studentSelect = document.getElementById('card-input-student-select');
+    if (studentSelect) {
+      studentSelect.addEventListener('change', (e) => {
+        const val = e.target.value;
+        if (val === 'custom') {
+          cardState.studentId = null;
+          cardState.tempUploadedPhoto = null;
+        } else {
+          const s = students.find(x => x.id === Number(val));
+          if (s) {
+            cardState.studentId = s.id;
+            cardState.name = s.full_name;
+            cardState.code = String(s.code).startsWith('#') ? s.code : `#${s.code}`;
+            cardState.mobile = s.primary_guardian_mobile || '';
+            cardState.photo = s.photo || null;
+            cardState.tempUploadedPhoto = null;
+            cardState.extraValue = s.medical_notes || '';
+
+            // Update inputs
+            document.getElementById('card-input-name').value = cardState.name;
+            document.getElementById('card-input-code').value = cardState.code;
+            document.getElementById('card-input-mobile').value = cardState.mobile;
+            document.getElementById('card-input-extra-val').value = cardState.extraValue;
+          }
+        }
+        updateCardPreview();
+      });
+    }
+
+    // 2. Input change listeners
+    const titleP1Input = document.getElementById('card-input-title-p1');
+    if (titleP1Input) {
+      titleP1Input.addEventListener('input', (e) => {
+        cardState.nurseryTitlePart1 = e.target.value;
+        updateCardPreview();
+      });
+    }
+
+    const titleP2Input = document.getElementById('card-input-title-p2');
+    if (titleP2Input) {
+      titleP2Input.addEventListener('input', (e) => {
+        cardState.nurseryTitlePart2 = e.target.value;
+        updateCardPreview();
+      });
+    }
+
+    const nameInput = document.getElementById('card-input-name');
+    if (nameInput) {
+      nameInput.addEventListener('input', (e) => {
+        cardState.name = e.target.value;
+        updateCardPreview();
+      });
+    }
+
+    const codeInput = document.getElementById('card-input-code');
+    if (codeInput) {
+      codeInput.addEventListener('input', (e) => {
+        cardState.code = e.target.value;
+        updateCardPreview();
+      });
+    }
+
+    const mobileInput = document.getElementById('card-input-mobile');
+    if (mobileInput) {
+      mobileInput.addEventListener('input', (e) => {
+        cardState.mobile = e.target.value;
+        updateCardPreview();
+      });
+    }
+
+    const extraLabelInput = document.getElementById('card-input-extra-label');
+    if (extraLabelInput) {
+      extraLabelInput.addEventListener('input', (e) => {
+        cardState.extraLabel = e.target.value;
+        updateCardPreview();
+      });
+    }
+
+    const extraValInput = document.getElementById('card-input-extra-val');
+    if (extraValInput) {
+      extraValInput.addEventListener('input', (e) => {
+        cardState.extraValue = e.target.value;
+        updateCardPreview();
+      });
+    }
+
+    // 3. Photo upload
+    const uploadPhotoInput = document.getElementById('card-input-upload-photo');
+    if (uploadPhotoInput) {
+      uploadPhotoInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+          const img = new Image();
+          img.onload = () => {
+            const maxDim = 600;
+            let w = img.width, h = img.height;
+            if (w > maxDim || h > maxDim) {
+              if (w > h) { h = Math.round((h * maxDim) / w); w = maxDim; }
+              else { w = Math.round((w * maxDim) / h); h = maxDim; }
+            }
+            const canvas = document.createElement('canvas');
+            canvas.width = w; canvas.height = h;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, w, h);
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
+            cardState.photo = dataUrl;
+            cardState.tempUploadedPhoto = dataUrl;
+            updateCardPreview();
+            showToast('تم تحميل صورة الطفل للكارنيه 📷', 'info');
+          };
+          img.src = ev.target.result;
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+
+    // System photo button
+    const sysPhotoBtn = document.getElementById('btn-card-use-system-photo');
+    if (sysPhotoBtn) {
+      sysPhotoBtn.addEventListener('click', () => {
+        if (cardState.studentId) {
+          const s = students.find(x => x.id === cardState.studentId);
+          if (s && s.photo) {
+            cardState.photo = s.photo;
+            cardState.tempUploadedPhoto = null;
+            updateCardPreview();
+            showToast('تمت استعادة صورة الطفل المسجلة بالنظام', 'info');
+          } else {
+            showToast('الطفل ليس لديه صورة مسجلة في ملفه', 'warning');
+          }
+        } else {
+          showToast('يرجى اختيار طفل من القائمة أولاً', 'info');
+        }
+      });
+    }
+
+    // Reset photo button
+    const resetPhotoBtn = document.getElementById('btn-card-reset-photo');
+    if (resetPhotoBtn) {
+      resetPhotoBtn.addEventListener('click', () => {
+        cardState.photo = null;
+        cardState.tempUploadedPhoto = null;
+        updateCardPreview();
+        showToast('تم التعيين إلى الرسم الافتراضي', 'info');
+      });
+    }
+
+    // 4. Themes
+    const themeButtons = document.querySelectorAll('.theme-select-btn');
+    themeButtons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        const theme = btn.getAttribute('data-theme');
+        cardState.theme = theme;
+        themeButtons.forEach(b => {
+          b.classList.remove('border-2', 'border-amber-300', 'border-teal-500', 'shadow-xs');
+          b.classList.add('border-slate-200');
+        });
+        btn.classList.remove('border-slate-200');
+        btn.classList.add('border-2', 'border-amber-300', 'shadow-xs');
+        updateCardPreview();
+      });
+    });
+
+    // 5. Toggles
+    const treeSunToggle = document.getElementById('card-toggle-tree-sun');
+    if (treeSunToggle) {
+      treeSunToggle.addEventListener('change', (e) => {
+        cardState.showTreeSun = e.target.checked;
+        updateCardPreview();
+      });
+    }
+
+    const wmToggle = document.getElementById('card-toggle-watermark');
+    if (wmToggle) {
+      wmToggle.addEventListener('change', (e) => {
+        cardState.showWatermark = e.target.checked;
+        updateCardPreview();
+      });
+    }
+
+    const qrToggle = document.getElementById('card-toggle-qr');
+    if (qrToggle) {
+      qrToggle.addEventListener('change', (e) => {
+        cardState.showQr = e.target.checked;
+        updateCardPreview();
+      });
+    }
+
+    // Reset fields button
+    const resetFieldsBtn = document.getElementById('btn-card-reset-fields');
+    if (resetFieldsBtn) {
+      resetFieldsBtn.addEventListener('click', () => {
+        cardState.nurseryTitlePart1 = 'حضانة';
+        cardState.nurseryTitlePart2 = 'مامي وان';
+        document.getElementById('card-input-title-p1').value = 'حضانة';
+        document.getElementById('card-input-title-p2').value = 'مامي وان';
+        updateCardPreview();
+      });
+    }
+
+    // 6. Action Buttons: Print, Download PNG, Save Photo, WhatsApp
+    const printBtn = document.getElementById('btn-card-print');
+    if (printBtn) {
+      printBtn.addEventListener('click', () => {
+        printStudentCard();
+      });
+    }
+
+    const downloadPngBtn = document.getElementById('btn-card-download-png');
+    if (downloadPngBtn) {
+      downloadPngBtn.addEventListener('click', () => {
+        downloadStudentCardAsPng(cardState);
+      });
+    }
+
+    const savePhotoBtn = document.getElementById('btn-card-save-photo');
+    if (savePhotoBtn) {
+      savePhotoBtn.addEventListener('click', async () => {
+        if (!cardState.studentId || !cardState.tempUploadedPhoto) return;
+        savePhotoBtn.disabled = true;
+        savePhotoBtn.innerText = 'جاري الحفظ...';
+        const upRes = await api(`/api/students/${cardState.studentId}`, {
+          method: 'PUT',
+          body: JSON.stringify({ photo: cardState.tempUploadedPhoto })
+        });
+        savePhotoBtn.disabled = false;
+        if (upRes && upRes.success) {
+          showToast('تم حفظ صورة الكارنيه في ملف الطفل بنجاح! 💾', 'success');
+          cardState.tempUploadedPhoto = null;
+          savePhotoBtn.classList.add('hidden');
+          // Refresh students if page open
+          const s = students.find(x => x.id === cardState.studentId);
+          if (s) s.photo = cardState.photo;
+        } else {
+          showToast(upRes && upRes.error ? upRes.error : 'فشل حفظ الصورة', 'error');
+          savePhotoBtn.innerText = '💾 حفظ الصورة لملف الطفل';
+        }
+      });
+    }
+
+    const waBtn = document.getElementById('btn-card-whatsapp');
+    if (waBtn) {
+      waBtn.addEventListener('click', () => {
+        const rawMob = (cardState.mobile || '').replace(/\D/g, '');
+        if (!rawMob) {
+          showToast('يرجى إدخال رقم هاتف ولي الأمر أولاً', 'warning');
+          return;
+        }
+        let formatted = rawMob;
+        if (formatted.startsWith('0')) formatted = '2' + formatted;
+        else if (!formatted.startsWith('20') && formatted.length === 10) formatted = '20' + formatted;
+
+        const p1 = cardState.nurseryTitlePart1 || 'حضانة';
+        const p2 = cardState.nurseryTitlePart2 || 'مامي وان';
+        const msg = `السلام عليكم ورحمة الله وبركاته،\nيسعدنا في *${p1} ${p2}* مشاركة بيانات بطاقة/كارنيه الطفل:\n👶 *الاسم:* ${cardState.name}\n🔖 *كود الطفل:* ${cardState.code}\n📱 *رقم ولي الأمر:* ${cardState.mobile}\nنتمنى لكم ولطفلكم يوماً سعيداً ومليئاً بالنشاط والتعلم! ❤️`;
+        window.open(`https://wa.me/${formatted}?text=${encodeURIComponent(msg)}`, '_blank');
+      });
+    }
+
   });
+}
+
+// Print Handler for Student Card
+function printStudentCard() {
+  let printTarget = document.getElementById('student-id-card-print-target');
+  if (!printTarget) {
+    printTarget = document.createElement('div');
+    printTarget.id = 'student-id-card-print-target';
+    document.body.appendChild(printTarget);
+  }
+
+  const livePreview = document.getElementById('card-live-preview');
+  if (!livePreview) return;
+
+  // Clone preview element
+  printTarget.innerHTML = livePreview.outerHTML;
+
+  // Set printing class
+  document.body.classList.add('printing-student-card');
+
+  window.print();
+
+  const cleanup = () => {
+    document.body.classList.remove('printing-student-card');
+    if (printTarget && printTarget.parentNode) {
+      printTarget.parentNode.removeChild(printTarget);
+    }
+    window.removeEventListener('afterprint', cleanup);
+  };
+  window.addEventListener('afterprint', cleanup);
+  setTimeout(cleanup, 2500);
+}
+
+// High-Resolution PNG Generator (HTML5 Canvas 1200x760 HD)
+function downloadStudentCardAsPng(cardData) {
+  const canvas = document.createElement('canvas');
+  canvas.width = 1200;
+  canvas.height = 760;
+  const ctx = canvas.getContext('2d');
+
+  function roundRect(c, x, y, width, height, radius) {
+    c.beginPath();
+    c.moveTo(x + radius, y);
+    c.lineTo(x + width - radius, y);
+    c.quadraticCurveTo(x + width, y, x + width, y + radius);
+    c.lineTo(x + width, y + height - radius);
+    c.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+    c.lineTo(x + radius, y + height);
+    c.quadraticCurveTo(x, y + height, x, y + height - radius);
+    c.lineTo(x, y + radius);
+    c.quadraticCurveTo(x, y, x + radius, y);
+    c.closePath();
+  }
+
+  // Theme Colors
+  let bg = '#fbf8f1';
+  let border = '#e5dbcb';
+  let accent1 = '#eee1ce';
+  let accent2 = '#cfe0cf';
+  let photoBg = '#ede3d3';
+  let photoBorder = '#c4b59d';
+  let primaryText = '#3d2f25';
+  let valColor = '#1e293b';
+
+  if (cardData.theme === 'theme-mamy-teal') {
+    bg = '#f0fdfa'; border = '#99f6e4'; accent1 = '#ccfbf1'; accent2 = '#a7f3d0';
+    photoBg = '#e6fffa'; photoBorder = '#5eead4'; primaryText = '#134e4a';
+  } else if (cardData.theme === 'theme-princess-pink') {
+    bg = '#fff1f2'; border = '#fecdd3'; accent1 = '#ffe4e6'; accent2 = '#fce7f3';
+    photoBg = '#ffe4e6'; photoBorder = '#fda4af'; primaryText = '#881337';
+  } else if (cardData.theme === 'theme-royal-blue') {
+    bg = '#eff6ff'; border = '#bfdbfe'; accent1 = '#dbeafe'; accent2 = '#e0e7ff';
+    photoBg = '#e0f2fe'; photoBorder = '#93c5fd'; primaryText = '#1e3a8a';
+  }
+
+  // 1. Base Card Shape with border
+  ctx.save();
+  roundRect(ctx, 10, 10, 1180, 740, 48);
+  ctx.fillStyle = bg;
+  ctx.fill();
+  ctx.lineWidth = 6;
+  ctx.strokeStyle = border;
+  ctx.stroke();
+  ctx.clip();
+
+  // 2. Corner Organic Shapes
+  ctx.beginPath();
+  ctx.arc(0, 0, 180, 0, Math.PI * 2);
+  ctx.fillStyle = accent1;
+  ctx.fill();
+
+  ctx.beginPath();
+  ctx.arc(1200, 760, 210, 0, Math.PI * 2);
+  ctx.fillStyle = accent2;
+  ctx.fill();
+
+  // 3. Subtle Stars
+  ctx.fillStyle = '#f59e0b';
+  ctx.font = '28px sans-serif';
+  ctx.fillText('✦', 880, 70);
+  ctx.fillText('✦', 450, 700);
+
+  // 4. Header: Logo & Titles
+  const logo = new Image();
+  logo.crossOrigin = 'anonymous';
+
+  const finishCanvasExport = () => {
+    // Draw Logo
+    ctx.save();
+    roundRect(ctx, 60, 45, 95, 95, 20);
+    ctx.clip();
+    try {
+      ctx.drawImage(logo, 60, 45, 95, 95);
+    } catch (e) {}
+    ctx.restore();
+
+    // Border around logo
+    ctx.save();
+    roundRect(ctx, 60, 45, 95, 95, 20);
+    ctx.strokeStyle = '#fde68a';
+    ctx.lineWidth = 3;
+    ctx.stroke();
+    ctx.restore();
+
+    // Nursery Title (RTL Arabic)
+    ctx.direction = 'rtl';
+    ctx.textAlign = 'right';
+    ctx.font = 'bold 44px Cairo, Tajawal, Tahoma, sans-serif';
+    ctx.fillStyle = '#1e3a5f';
+    const p1 = cardData.nurseryTitlePart1 || 'حضانة';
+    const p2 = cardData.nurseryTitlePart2 || 'مامي وان';
+    ctx.fillText(`${p1} ${p2}`, 650, 95);
+
+    ctx.font = 'bold 20px Cairo, Tajawal, Tahoma, sans-serif';
+    ctx.fillStyle = '#64748b';
+    ctx.fillText('مركز تخاطب وتنمية مهارات ورعاية أطفال', 650, 130);
+
+    // Tree & Sun (Top Right)
+    if (cardData.showTreeSun) {
+      // Sun
+      ctx.beginPath();
+      ctx.arc(1060, 75, 34, 0, Math.PI * 2);
+      ctx.fillStyle = '#fef08a';
+      ctx.fill();
+      ctx.strokeStyle = '#f59e0b';
+      ctx.lineWidth = 3;
+      ctx.stroke();
+
+      // Tree Trunk
+      ctx.beginPath();
+      ctx.moveTo(995, 110);
+      ctx.lineTo(985, 160);
+      ctx.lineTo(1015, 160);
+      ctx.lineTo(1005, 110);
+      ctx.closePath();
+      ctx.fillStyle = '#8d6e63';
+      ctx.fill();
+
+      // Tree Canopy
+      ctx.beginPath();
+      ctx.arc(975, 100, 30, 0, Math.PI * 2);
+      ctx.arc(1015, 85, 35, 0, Math.PI * 2);
+      ctx.arc(1030, 115, 28, 0, Math.PI * 2);
+      ctx.fillStyle = '#a7d7b5';
+      ctx.fill();
+      ctx.strokeStyle = '#4a7c59';
+      ctx.lineWidth = 3;
+      ctx.stroke();
+    }
+
+    // Divider under header
+    ctx.beginPath();
+    ctx.moveTo(60, 165);
+    ctx.lineTo(1140, 165);
+    ctx.strokeStyle = border;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // Watermark Logo & Text
+    if (cardData.showWatermark) {
+      ctx.save();
+      ctx.globalAlpha = 0.08;
+      try {
+        ctx.drawImage(logo, 560, 220, 320, 320);
+      } catch (e) {}
+      ctx.globalAlpha = 0.16;
+      ctx.direction = 'ltr';
+      ctx.textAlign = 'center';
+      ctx.font = '900 36px sans-serif';
+      ctx.fillStyle = '#8b572a';
+      ctx.fillText('MAMY ONE', 720, 600);
+      ctx.restore();
+    }
+
+    // Photo Box (Left)
+    const px = 65, py = 205, pw = 270, ph = 350;
+    ctx.save();
+    roundRect(ctx, px, py, pw, ph, 28);
+    ctx.fillStyle = photoBg;
+    ctx.fill();
+    ctx.strokeStyle = photoBorder;
+    ctx.lineWidth = 4;
+    ctx.setLineDash([12, 10]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.restore();
+
+    const drawFieldsAndFinish = () => {
+      // Right Column Fields
+      ctx.direction = 'rtl';
+      ctx.textAlign = 'right';
+
+      // Field 1: اسم الطفل
+      ctx.font = 'bold 32px Cairo, Tajawal, Tahoma, sans-serif';
+      ctx.fillStyle = primaryText;
+      ctx.fillText('اسم الطفل:', 1120, 275);
+      ctx.font = 'bold 36px Cairo, Tajawal, Tahoma, sans-serif';
+      ctx.fillStyle = valColor;
+      ctx.fillText(cardData.name || '', 940, 275);
+
+      ctx.beginPath();
+      ctx.setLineDash([5, 8]);
+      ctx.moveTo(1120, 295);
+      ctx.lineTo(390, 295);
+      ctx.strokeStyle = photoBorder;
+      ctx.lineWidth = 3;
+      ctx.stroke();
+
+      // Field 2: كود الطفل
+      ctx.font = 'bold 32px Cairo, Tajawal, Tahoma, sans-serif';
+      ctx.fillStyle = primaryText;
+      ctx.fillText('كود الطفل:', 1120, 385);
+      ctx.font = 'bold 36px monospace, Cairo, sans-serif';
+      ctx.fillStyle = '#0f766e';
+      ctx.fillText(cardData.code || '', 940, 385);
+
+      ctx.beginPath();
+      ctx.moveTo(1120, 405);
+      ctx.lineTo(390, 405);
+      ctx.stroke();
+
+      // Field 3: رقم ولي الأمر
+      ctx.font = 'bold 32px Cairo, Tajawal, Tahoma, sans-serif';
+      ctx.fillStyle = primaryText;
+      ctx.fillText('رقم ولي الأمر:', 1120, 495);
+      ctx.font = 'bold 34px monospace, Cairo, sans-serif';
+      ctx.fillStyle = valColor;
+      ctx.fillText(cardData.mobile || '-', 910, 495);
+
+      ctx.beginPath();
+      ctx.moveTo(1120, 515);
+      ctx.lineTo(390, 515);
+      ctx.stroke();
+
+      // Field 4: Extra if provided
+      if (cardData.extraValue) {
+        ctx.font = 'bold 28px Cairo, Tajawal, Tahoma, sans-serif';
+        ctx.fillStyle = primaryText;
+        ctx.fillText(cardData.extraLabel || 'ملاحظات:', 1120, 595);
+        ctx.font = 'bold 30px Cairo, Tajawal, Tahoma, sans-serif';
+        ctx.fillStyle = '#475569';
+        ctx.fillText(cardData.extraValue, 940, 595);
+
+        ctx.beginPath();
+        ctx.moveTo(1120, 615);
+        ctx.lineTo(390, 615);
+        ctx.stroke();
+      }
+
+      ctx.setLineDash([]);
+
+      // Bottom Footer Bar
+      ctx.beginPath();
+      ctx.moveTo(60, 680);
+      ctx.lineTo(1140, 680);
+      ctx.strokeStyle = border;
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      ctx.font = 'bold 20px Cairo, Tajawal, Tahoma, sans-serif';
+      ctx.fillStyle = '#64748b';
+      ctx.fillText('نظام مامي وان لإدارة الحضانات والتخاطب • MAMY ONE NURSERY SYSTEM', 1120, 715);
+
+      ctx.restore(); // Restore base card clip
+
+      // Trigger Download
+      canvas.toBlob((blob) => {
+        if (!blob) return;
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        const cleanName = (cardData.name || 'طفل').replace(/\s+/g, '_');
+        a.download = `كارنيه_مامي_وان_${cleanName}.png`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 2000);
+        showToast('تم تحميل كارنيه الطفل كصورة عالية الدقة بنجاح! 📥', 'success');
+      }, 'image/png');
+    };
+
+    // Draw Photo inside photo box
+    if (cardData.photo) {
+      const pImg = new Image();
+      pImg.crossOrigin = 'anonymous';
+      pImg.onload = () => {
+        ctx.save();
+        roundRect(ctx, px + 6, py + 6, pw - 12, ph - 12, 22);
+        ctx.clip();
+        
+        // Cover-fit math
+        const imgAspect = pImg.width / pImg.height;
+        const boxAspect = (pw - 12) / (ph - 12);
+        let dw = pw - 12, dh = ph - 12, dx = px + 6, dy = py + 6;
+        if (imgAspect > boxAspect) {
+          dw = dh * imgAspect;
+          dx = px + 6 - (dw - (pw - 12)) / 2;
+        } else {
+          dh = dw / imgAspect;
+          dy = py + 6 - (dh - (ph - 12)) / 2;
+        }
+        ctx.drawImage(pImg, dx, dy, dw, dh);
+        ctx.restore();
+        drawFieldsAndFinish();
+      };
+      pImg.onerror = () => {
+        drawDefaultPhotoAvatar(ctx, px, py, pw, ph);
+        drawFieldsAndFinish();
+      };
+      pImg.src = cardData.photo;
+    } else {
+      drawDefaultPhotoAvatar(ctx, px, py, pw, ph);
+      drawFieldsAndFinish();
+    }
+  };
+
+  logo.onload = () => finishCanvasExport();
+  logo.onerror = () => finishCanvasExport();
+  logo.src = '/images/logo.png';
+}
+
+function drawDefaultPhotoAvatar(ctx, px, py, pw, ph) {
+  ctx.save();
+  const cx = px + pw / 2;
+  const cy = py + ph / 2 - 15;
+  // Smiling cartoon head
+  ctx.beginPath();
+  ctx.arc(cx, cy, 65, 0, Math.PI * 2);
+  ctx.fillStyle = '#f8e7d5';
+  ctx.fill();
+  ctx.strokeStyle = '#8b572a';
+  ctx.lineWidth = 4;
+  ctx.stroke();
+
+  // Ears
+  ctx.beginPath();
+  ctx.arc(cx - 65, cy, 14, 0, Math.PI * 2);
+  ctx.arc(cx + 65, cy, 14, 0, Math.PI * 2);
+  ctx.fillStyle = '#f8e7d5';
+  ctx.fill();
+  ctx.stroke();
+
+  // Cheeks
+  ctx.beginPath();
+  ctx.arc(cx - 30, cy + 10, 10, 0, Math.PI * 2);
+  ctx.arc(cx + 30, cy + 10, 10, 0, Math.PI * 2);
+  ctx.fillStyle = '#fbcfe8';
+  ctx.fill();
+
+  // Eyes
+  ctx.beginPath();
+  ctx.arc(cx - 24, cy - 8, 7, 0, Math.PI * 2);
+  ctx.arc(cx + 24, cy - 8, 7, 0, Math.PI * 2);
+  ctx.fillStyle = '#3b2f25';
+  ctx.fill();
+
+  // Smile
+  ctx.beginPath();
+  ctx.arc(cx, cy + 12, 22, 0.2 * Math.PI, 0.8 * Math.PI);
+  ctx.strokeStyle = '#8b572a';
+  ctx.lineWidth = 4;
+  ctx.stroke();
+
+  // Text "صورة الطفل"
+  ctx.font = 'bold 26px Cairo, Tajawal, Tahoma, sans-serif';
+  ctx.fillStyle = '#8b572a';
+  ctx.textAlign = 'center';
+  ctx.direction = 'rtl';
+  ctx.fillText('صورة الطفل', cx, py + ph - 25);
+  ctx.restore();
 }
 
 // Print Receipt Generator (Thermal / A4)
@@ -3390,6 +4490,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Quick Action Buttons in Sidebar
   document.getElementById('btn-quick-add-student').addEventListener('click', openAddStudentModal);
+  const quickCardBtn = document.getElementById('btn-quick-card-designer');
+  if (quickCardBtn) {
+    quickCardBtn.addEventListener('click', () => openStudentIdCardModal());
+  }
   document.getElementById('btn-quick-add-payment').addEventListener('click', openAddPaymentModal);
 
   // User Profile Modal Click (Header + Sidebar)
