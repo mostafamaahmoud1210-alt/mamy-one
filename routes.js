@@ -145,6 +145,55 @@ async function handleApi(req, res, pathname, query, body) {
     return sendJson(res, 200, { success: true, message: 'تم تغيير كلمة المرور بنجاح' });
   }
 
+  if ((pathname === '/api/auth/profile' || pathname === '/api/auth/update-profile') && (method === 'PUT' || method === 'POST')) {
+    const { full_name, fullName, current_password, currentPassword, new_password, newPassword } = body || {};
+    const nameToUpdate = full_name || fullName;
+    const curPass = current_password || currentPassword;
+    const newPass = new_password || newPassword;
+
+    if (!nameToUpdate || !nameToUpdate.trim()) {
+      return sendError(res, 400, 'الاسم الكامل مطلوب');
+    }
+
+    if (newPass) {
+      if (!curPass) {
+        return sendError(res, 400, 'يرجى إدخال كلمة المرور الحالية لتأكيد التغيير');
+      }
+      if (newPass.length < 6) {
+        return sendError(res, 400, 'كلمة المرور الجديدة يجب ألا تقل عن 6 أحرف');
+      }
+      const u = db.prepare('SELECT password_hash, salt FROM users WHERE id = ?').get(user.id);
+      if (!verifyPassword(curPass, u.password_hash, u.salt)) {
+        return sendError(res, 400, 'كلمة المرور الحالية غير صحيحة');
+      }
+      const { hash, salt } = hashPassword(newPass);
+      db.prepare('UPDATE users SET password_hash = ?, salt = ?, full_name = ?, updated_at = ? WHERE id = ?')
+        .run(hash, salt, nameToUpdate.trim(), getCairoNow(), user.id);
+    } else {
+      db.prepare('UPDATE users SET full_name = ?, updated_at = ? WHERE id = ?')
+        .run(nameToUpdate.trim(), getCairoNow(), user.id);
+    }
+
+    const updatedUser = db.prepare('SELECT id, username, full_name, role FROM users WHERE id = ?').get(user.id);
+
+    logAudit({
+      user,
+      action: 'USER_UPDATE',
+      entityType: 'user',
+      entityId: user.id,
+      details: 'تحديث بيانات الملف الشخصي' + (newPass ? ' وتغيير كلمة المرور' : '')
+    });
+
+    return sendJson(res, 200, {
+      success: true,
+      message: 'تم حفظ بيانات الملف الشخصي بنجاح',
+      user: {
+        ...updatedUser,
+        permissions: user.permissions
+      }
+    });
+  }
+
   // -------------------------------------------------------------------------
   // 2. DASHBOARD ANALYTICS
   // -------------------------------------------------------------------------
@@ -1932,6 +1981,11 @@ async function handleApi(req, res, pathname, query, body) {
     const notifId = Number(pathname.match(/^\/api\/notifications\/(\d+)\/read$/)[1]);
     db.prepare('UPDATE notifications SET is_read = 1 WHERE id = ?').run(notifId);
     return sendJson(res, 200, { success: true });
+  }
+
+  if ((pathname === '/api/notifications/read-all' || pathname === '/api/notifications/clear') && (method === 'PUT' || method === 'POST')) {
+    db.prepare('UPDATE notifications SET is_read = 1 WHERE is_read = 0').run();
+    return sendJson(res, 200, { success: true, message: 'تم تحديد جميع الإشعارات كمقروءة' });
   }
 
   if (pathname === '/api/scheduler/run' && method === 'POST') {

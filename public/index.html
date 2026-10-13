@@ -31,7 +31,7 @@
   <!-- Cairo Font & Custom Styles -->
   <link rel="stylesheet" href="/css/style.css">
   
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220%22%22><text y=%2222%22 font-size=%2222%22>🧸</text></svg>">
+  <link rel="icon" type="image/jpeg" href="/images/logo.png">
 </head>
 <body class="bg-slate-50 text-slate-800 antialiased min-h-screen flex flex-col">
 
@@ -45,21 +45,18 @@
           <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
         </button>
         <div class="flex items-center gap-2.5">
-          <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-teal-600 to-teal-400 flex items-center justify-center text-white text-xl shadow-md shadow-teal-500/20">
-            🧸
-          </div>
+          <img src="/images/logo.png" alt="Mamy One Logo" class="w-10 h-10 rounded-xl object-cover shadow-md shadow-teal-500/20 border border-teal-100">
           <div>
-            <h1 class="text-lg font-bold text-slate-900 leading-none">Mamy One</h1>
-            <span class="text-xs text-teal-600 font-semibold tracking-wide">نظام إدارة وحسابات الحضانات</span>
+            <h1 class="text-base sm:text-lg font-bold text-slate-900 leading-none">Mamy One</h1>
+            <span class="text-[11px] sm:text-xs text-teal-600 font-semibold tracking-wide">مركز تخاطب وحضانة أطفال</span>
           </div>
         </div>
       </div>
 
       <!-- Center Status & Live Clock -->
-      <div class="hidden lg:flex items-center gap-4 text-xs text-slate-500 bg-slate-50 px-3 py-1.5 rounded-full border border-slate-200/80">
+      <div class="hidden md:flex items-center gap-3 text-xs text-slate-500 bg-slate-50 px-3.5 py-1.5 rounded-full border border-slate-200/80">
         <div class="flex items-center gap-1.5">
           <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-          <span>القاهرة:</span>
           <span id="live-cairo-clock" class="font-mono font-bold text-slate-700">--:--:--</span>
         </div>
         <span class="text-slate-300">|</span>
@@ -95,12 +92,15 @@
 
         <!-- User Info Badge & Logout -->
         <div class="flex items-center gap-2 pl-2 border-r border-slate-200">
-          <div class="w-8 h-8 rounded-full bg-teal-100 text-teal-700 flex items-center justify-center font-bold text-sm" id="user-avatar-letter">م</div>
-          <div class="hidden sm:block text-right">
-            <div class="text-xs font-bold text-slate-800" id="user-display-name">مدير النظام</div>
-            <div class="text-[11px] text-teal-600" id="user-display-role">مدير عام</div>
-          </div>
-          <button id="btn-logout" title="تسجيل الخروج" class="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition">
+          <button id="btn-user-profile" type="button" class="flex items-center gap-2 p-1.5 rounded-xl hover:bg-teal-50/80 transition cursor-pointer text-right group border border-transparent hover:border-teal-200" title="الملف الشخصي وتغيير كلمة المرور">
+            <div class="w-8 h-8 rounded-full bg-teal-100 text-teal-700 flex items-center justify-center font-bold text-sm group-hover:bg-teal-600 group-hover:text-white transition" id="user-avatar-letter">م</div>
+            <div class="hidden sm:block text-right">
+              <div class="text-xs font-bold text-slate-800 group-hover:text-teal-700 transition" id="user-display-name">مدير النظام</div>
+              <div class="text-[11px] text-teal-600" id="user-display-role">مدير عام</div>
+            </div>
+            <span class="text-slate-400 group-hover:text-teal-600 text-xs transition">⚙️</span>
+          </button>
+          <button id="btn-logout" title="تسجيل الخروج" class="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition cursor-pointer">
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
           </button>
         </div>

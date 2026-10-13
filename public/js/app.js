@@ -260,17 +260,16 @@ function updateUserHeader() {
 function showLoginModal() {
   const content = `
     <div class="flex flex-col items-center text-center mb-6">
-      <div class="w-16 h-16 rounded-2xl bg-gradient-to-tr from-teal-600 to-teal-400 flex items-center justify-center text-white text-3xl shadow-lg shadow-teal-500/30 mb-3">
-        🧸
-      </div>
-      <h2 class="text-xl font-bold text-slate-900">حضانة Mamy One</h2>
+      <img src="/images/logo.png" alt="Mamy One Logo" class="w-16 h-16 rounded-2xl object-cover shadow-lg border border-teal-100 mb-3">
+      <h2 class="text-xl font-bold text-slate-900">Mamy One</h2>
+      <p class="text-xs text-teal-700 font-semibold mt-0.5">مركز تخاطب وحضانة أطفال</p>
       <p class="text-xs text-slate-500 mt-1">يرجى تسجيل الدخول للوصول إلى لوحة التحكم والبيانات</p>
     </div>
 
     <form id="login-form" class="space-y-4">
       <div>
         <label class="block text-xs font-semibold text-slate-700 mb-1">اسم المستخدم</label>
-        <input type="text" id="login-username" required class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm focus:border-teal-500 focus:ring-2 focus:ring-teal-100 outline-none" placeholder="admin">
+        <input type="text" id="login-username" required class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm focus:border-teal-500 focus:ring-2 focus:ring-teal-100 outline-none" placeholder="اسم المستخدم">
       </div>
       <div>
         <label class="block text-xs font-semibold text-slate-700 mb-1">كلمة المرور</label>
@@ -280,20 +279,9 @@ function showLoginModal() {
         تسجيل الدخول
       </button>
     </form>
-
-    <div class="mt-4 pt-4 border-t border-slate-100 text-center">
-      <button id="btn-quick-fill-admin" class="text-xs text-teal-600 hover:underline font-semibold">
-        💡 تعبئة بيانات الدخول الافتراضية (admin / admin123)
-      </button>
-    </div>
   `;
 
   openModal('تسجيل الدخول للنظام', content, () => {
-    document.getElementById('btn-quick-fill-admin').addEventListener('click', () => {
-      document.getElementById('login-username').value = 'admin';
-      document.getElementById('login-password').value = 'admin123';
-    });
-
     document.getElementById('login-form').addEventListener('submit', async (e) => {
       e.preventDefault();
       const username = document.getElementById('login-username').value.trim();
@@ -439,7 +427,7 @@ async function renderDashboard(container) {
           <span class="text-2xl">👋</span>
           <h2 class="text-xl font-bold">أهلاً بك، ${state.user ? state.user.full_name : 'مدير النظام'}</h2>
         </div>
-        <p class="text-teal-100 text-xs mt-1">مرحباً بك في لوحة تحكم وإدارة حضانة Mamy One – كافة العمليات والإحصائيات محدثة لحظياً بتوقيت القاهرة.</p>
+        <p class="text-teal-100 text-xs mt-1">مرحباً بك في لوحة تحكم وإدارة مركز وحضانة Mamy One – كافة العمليات والإحصائيات محدثة لحظياً.</p>
       </div>
       <div class="flex items-center gap-2">
         <button id="btn-dash-add-student" class="btn bg-white text-teal-800 hover:bg-teal-50 text-xs font-bold shadow-sm">
@@ -918,31 +906,13 @@ async function openAddStudentModal() {
         </div>
       </div>
 
-      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <div>
-          <label class="block text-xs font-semibold text-slate-700 mb-1">تصنيف الطفل *</label>
-          <select id="ast-classification" class="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs focus:border-teal-500 outline-none bg-white font-bold text-slate-800">
-            <option value="regular">طفل طبيعي (Regular)</option>
-            <option value="learning_difficulties">صعوبات تعلم (Learning Support)</option>
-            <option value="speech_therapy">تخاطب (Speech Therapy)</option>
-          </select>
-        </div>
-
-        <div>
-          <label class="block text-xs font-semibold text-slate-700 mb-1">القاعة / الفصل</label>
-          <select id="ast-classroom" class="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs focus:border-teal-500 outline-none bg-white">
-            <option value="">بدون تعيين</option>
-            ${classrooms.map(c => `<option value="${c.id}">${c.name}</option>`).join('')}
-          </select>
-        </div>
-
-        <div>
-          <label class="block text-xs font-semibold text-slate-700 mb-1">المعلمة المسؤولة</label>
-          <select id="ast-teacher" class="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs focus:border-teal-500 outline-none bg-white">
-            <option value="">بدون تعيين</option>
-            ${employees.map(e => `<option value="${e.id}">${e.full_name} (${e.job_title})</option>`).join('')}
-          </select>
-        </div>
+      <div>
+        <label class="block text-xs font-semibold text-slate-700 mb-1">تصنيف الطفل *</label>
+        <select id="ast-classification" class="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs focus:border-teal-500 outline-none bg-white font-bold text-slate-800">
+          <option value="regular">طفل طبيعي (Regular)</option>
+          <option value="learning_difficulties">صعوبات تعلم (Learning Support)</option>
+          <option value="speech_therapy">تخاطب (Speech Therapy)</option>
+        </select>
       </div>
 
       <div class="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl space-y-3">
@@ -952,7 +922,7 @@ async function openAddStudentModal() {
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div>
             <label class="block text-xs text-slate-600 mb-1">المصروفات الشهرية (ج.م) *</label>
-            <input type="number" id="ast-tuition" min="0" step="50" value="1500" required class="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs focus:border-teal-500 outline-none font-bold">
+            <input type="number" id="ast-tuition" min="0" step="any" value="1500" required class="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs focus:border-teal-500 outline-none font-bold">
           </div>
           <div>
             <label class="block text-xs text-slate-600 mb-1">يوم الاستحقاق الشهري (1-28)</label>
@@ -960,7 +930,7 @@ async function openAddStudentModal() {
           </div>
           <div>
             <label class="block text-xs text-slate-600 mb-1">قيمة الخصم إن وجد (ج.م)</label>
-            <input type="number" id="ast-discount" min="0" value="0" class="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs focus:border-teal-500 outline-none">
+            <input type="number" id="ast-discount" min="0" step="any" value="0" class="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs focus:border-teal-500 outline-none">
           </div>
         </div>
         <div>
@@ -1082,8 +1052,8 @@ async function openAddStudentModal() {
         dob: document.getElementById('ast-dob').value,
         enrollment_date: document.getElementById('ast-enrollment').value,
         classification: document.getElementById('ast-classification').value,
-        classroom_id: document.getElementById('ast-classroom').value || null,
-        teacher_id: document.getElementById('ast-teacher').value || null,
+        classroom_id: document.getElementById('ast-classroom')?.value || null,
+        teacher_id: document.getElementById('ast-teacher')?.value || null,
         monthly_tuition: Number(document.getElementById('ast-tuition').value),
         payment_due_day: Number(document.getElementById('ast-due-day').value),
         discount_amount: Number(document.getElementById('ast-discount').value || 0),
@@ -1426,10 +1396,10 @@ async function printReceipt(paymentId) {
       
       <!-- Receipt Header -->
       <div class="text-center border-b-2 border-slate-800 pb-4 mb-4">
-        <div class="text-3xl mb-1">🧸</div>
+        <img src="/images/logo.png" alt="Mamy One Logo" class="w-16 h-16 mx-auto mb-2 rounded-xl object-cover shadow-sm border border-slate-200">
         <h2 class="text-xl font-black text-slate-900 tracking-tight">حضانة Mamy One</h2>
-        <div class="text-xs text-slate-600">نظام إدارة وحسابات الحضانات المتكامل</div>
-        <div class="text-xs text-slate-500 mt-1">القاهرة - مصر | هاتف: 01012345678</div>
+        <div class="text-xs text-teal-800 font-bold">مركز تخاطب وحضانة أطفال</div>
+        <div class="text-[11px] text-slate-500 mt-1">نظام إدارة وحسابات الحضانات المتكامل</div>
         <div class="inline-block px-3 py-1 bg-slate-100 border border-slate-300 rounded-full font-bold text-xs mt-3">
           إيصال استلام نقدية (سند قبض رسمي)
         </div>
@@ -1543,7 +1513,7 @@ function openAddPaymentModalWithStudents(students, preselectedId = null) {
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>
           <label class="block text-xs font-semibold text-slate-700 mb-1">المبلغ المحصل (ج.م) *</label>
-          <input type="number" id="pay-amount" min="1" step="10" required class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-black text-teal-800 focus:border-teal-500 outline-none" placeholder="1500">
+          <input type="number" id="pay-amount" min="0" step="any" required class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-black text-teal-800 focus:border-teal-500 outline-none" placeholder="أدخل أي مبلغ">
         </div>
 
         <div>
@@ -2057,7 +2027,7 @@ function openAddExpenseModal() {
 
         <div>
           <label class="block text-xs font-semibold text-slate-700 mb-1">المبلغ (ج.م) *</label>
-          <input type="number" id="exp-amount" min="1" step="5" required class="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm font-black text-rose-700 focus:border-teal-500 outline-none" placeholder="500">
+          <input type="number" id="exp-amount" min="0" step="any" required class="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm font-black text-rose-700 focus:border-teal-500 outline-none" placeholder="المبلغ">
         </div>
       </div>
 
@@ -2375,7 +2345,7 @@ function openAddEmployeeModal() {
         </div>
         <div>
           <label class="block text-xs font-semibold text-slate-700 mb-1">الراتب الشهري الأساسي (ج.م) *</label>
-          <input type="number" id="emp-salary" min="0" step="100" value="4000" required class="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs focus:border-teal-500 outline-none font-bold">
+          <input type="number" id="emp-salary" min="0" step="any" value="4000" required class="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs focus:border-teal-500 outline-none font-bold">
         </div>
       </div>
       <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
@@ -2420,7 +2390,7 @@ function openPaySalaryModal(payrollId, empName, dueAmount) {
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>
           <label class="block text-xs font-semibold text-slate-700 mb-1">مبلغ الصرف (ج.م) *</label>
-          <input type="number" id="sal-amount" value="${dueAmount}" min="1" step="50" required class="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm font-bold text-slate-900 outline-none">
+          <input type="number" id="sal-amount" value="${dueAmount}" min="0" step="any" required class="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm font-bold text-slate-900 outline-none">
         </div>
         <div>
           <label class="block text-xs font-semibold text-slate-700 mb-1">طريقة الدفع</label>
@@ -2748,7 +2718,7 @@ async function openAddSessionModal() {
 
         <div>
           <label class="block text-xs font-semibold text-slate-700 mb-1">رسوم الجلسة (ج.م)</label>
-          <input type="number" id="sess-fee" value="200" min="0" step="25" class="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs outline-none font-bold">
+          <input type="number" id="sess-fee" value="200" min="0" step="any" class="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs outline-none font-bold">
         </div>
       </div>
 
@@ -3205,6 +3175,127 @@ function openAddUserModal() {
 }
 
 // ============================================================================
+// USER PROFILE & ACCOUNT MANAGEMENT MODAL
+// ============================================================================
+async function openUserProfileModal() {
+  if (!state.user) {
+    showToast('يرجى تسجيل الدخول أولاً', 'warning');
+    return;
+  }
+  const user = state.user;
+  const roleName = user.role === 'admin' ? 'مدير عام (كامل الصلاحيات)' : (user.role === 'accountant' ? 'مسؤول مالي ومحاسب' : 'معلمة / أخصائية');
+
+  const content = `
+    <div class="space-y-4 text-right" dir="rtl">
+      <!-- Profile Header / Card -->
+      <div class="flex items-center gap-3.5 p-4 bg-gradient-to-r from-teal-50 to-emerald-50 rounded-2xl border border-teal-100">
+        <div class="w-14 h-14 rounded-2xl bg-teal-600 text-white flex items-center justify-center font-bold text-2xl shadow-md shadow-teal-600/30">
+          ${(user.full_name || 'م').charAt(0)}
+        </div>
+        <div class="flex-1 min-w-0">
+          <div class="text-sm font-bold text-slate-900 truncate">${user.full_name || 'مدير النظام'}</div>
+          <div class="text-xs text-slate-500 font-mono mt-0.5">@${user.username}</div>
+          <div class="inline-block px-2.5 py-0.5 mt-1.5 rounded-full bg-teal-100 text-teal-800 text-[11px] font-bold">
+            ${roleName}
+          </div>
+        </div>
+      </div>
+
+      <form id="profile-edit-form" class="space-y-4">
+        <!-- Account Info -->
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">اسم المستخدم (للدخول)</label>
+          <input type="text" value="${user.username}" disabled class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-100 text-slate-500 text-xs font-mono cursor-not-allowed">
+          <p class="text-[10px] text-slate-400 mt-1">اسم المستخدم ثابت لتوثيق العمليات وسجل التدقيق</p>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">الاسم الكامل / المعروض في النظام *</label>
+          <input type="text" id="prof-full-name" value="${user.full_name || ''}" required class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs focus:border-teal-500 outline-none font-bold text-slate-800" placeholder="مثال: أستاذ أحمد / مس سارة">
+        </div>
+
+        <!-- Change Password Section -->
+        <div class="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-3">
+          <div class="flex items-center gap-2 text-xs font-bold text-slate-800 border-b border-slate-200/80 pb-2">
+            <span>🔒</span>
+            <span>تغيير كلمة المرور (اترك الحقول فارغة إذا كنت لا ترغب بتغييرها)</span>
+          </div>
+
+          <div>
+            <label class="block text-xs text-slate-600 mb-1">كلمة المرور الحالية</label>
+            <input type="password" id="prof-cur-pass" class="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-xs focus:border-teal-500 outline-none bg-white" placeholder="مطلوبة فقط عند تغيير كلمة المرور">
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs text-slate-600 mb-1">كلمة المرور الجديدة</label>
+              <input type="password" id="prof-new-pass" minlength="6" class="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-xs focus:border-teal-500 outline-none bg-white" placeholder="6 أحرف أو أرقام على الأقل">
+            </div>
+            <div>
+              <label class="block text-xs text-slate-600 mb-1">تأكيد كلمة المرور الجديدة</label>
+              <input type="password" id="prof-confirm-pass" minlength="6" class="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-xs focus:border-teal-500 outline-none bg-white" placeholder="إعادة كتابة كلمة المرور">
+            </div>
+          </div>
+        </div>
+
+        <div class="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+          <button type="button" onclick="closeModal()" class="btn btn-secondary text-xs">إلغاء</button>
+          <button type="submit" class="btn btn-primary text-xs font-bold shadow-md shadow-teal-500/20">حفظ التعديلات</button>
+        </div>
+      </form>
+    </div>
+  `;
+
+  openModal('الملف الشخصي وإعدادات الحساب', content, () => {
+    document.getElementById('profile-edit-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const fullName = document.getElementById('prof-full-name').value.trim();
+      const curPass = document.getElementById('prof-cur-pass').value;
+      const newPass = document.getElementById('prof-new-pass').value;
+      const confirmPass = document.getElementById('prof-confirm-pass').value;
+
+      if (!fullName) {
+        showToast('يرجى كتابة الاسم الكامل', 'warning');
+        return;
+      }
+
+      if (newPass || confirmPass || curPass) {
+        if (!curPass) {
+          showToast('يرجى إدخال كلمة المرور الحالية لتأكيد التغيير', 'warning');
+          return;
+        }
+        if (!newPass || newPass.length < 6) {
+          showToast('كلمة المرور الجديدة يجب ألا تقل عن 6 أحرف', 'warning');
+          return;
+        }
+        if (newPass !== confirmPass) {
+          showToast('كلمة المرور الجديدة وتأكيدها غير متطابقين', 'warning');
+          return;
+        }
+      }
+
+      const res = await api('/api/auth/profile', {
+        method: 'PUT',
+        body: JSON.stringify({
+          full_name: fullName,
+          current_password: curPass || null,
+          new_password: newPass || null
+        })
+      });
+
+      if (res && res.success) {
+        state.user = { ...state.user, ...res.user };
+        updateUserHeader();
+        closeModal();
+        showToast('تم تحديث بيانات الملف الشخصي بنجاح', 'success');
+      } else {
+        showToast(res ? res.error : 'فشل تحديث البيانات', 'error');
+      }
+    });
+  });
+}
+
+// ============================================================================
 // APP INITIALIZATION & EVENT LISTENERS
 // ============================================================================
 document.addEventListener('DOMContentLoaded', async () => {
@@ -3228,15 +3319,42 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('btn-quick-add-student').addEventListener('click', openAddStudentModal);
   document.getElementById('btn-quick-add-payment').addEventListener('click', openAddPaymentModal);
 
+  // User Profile Modal Click
+  const userProfileBtn = document.getElementById('btn-user-profile');
+  if (userProfileBtn) {
+    userProfileBtn.addEventListener('click', openUserProfileModal);
+  }
+
   // Logout Button
   document.getElementById('btn-logout').addEventListener('click', logout);
 
-  // Notifications Dropdown Toggle
+  // Notifications Dropdown Toggle & Outside Click
   const notifBtn = document.getElementById('btn-notifications');
   const notifDropdown = document.getElementById('notif-dropdown');
+  const notifBadge = document.getElementById('notif-badge');
   if (notifBtn && notifDropdown) {
-    notifBtn.addEventListener('click', () => {
-      notifDropdown.classList.toggle('hidden');
+    notifBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const isHidden = notifDropdown.classList.contains('hidden');
+      if (isHidden) {
+        notifDropdown.classList.remove('hidden');
+        if (notifBadge) {
+          notifBadge.classList.add('hidden');
+          notifBadge.classList.remove('flex');
+          notifBadge.textContent = '0';
+        }
+        state.unreadNotifs = 0;
+        api('/api/notifications/read-all', { method: 'PUT' });
+      } else {
+        notifDropdown.classList.add('hidden');
+      }
+    });
+
+    // Close when clicking anywhere outside
+    document.addEventListener('click', (e) => {
+      if (!notifBtn.contains(e.target) && !notifDropdown.contains(e.target)) {
+        notifDropdown.classList.add('hidden');
+      }
     });
   }
 
