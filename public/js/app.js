@@ -248,13 +248,80 @@ async function checkAuth() {
 
 function updateUserHeader() {
   if (!state.user) return;
+  const user = state.user;
+  const roleTitle = user.role === 'admin' ? 'مدير عام' : (user.role === 'accountant' ? 'مسؤول مالي' : 'معلمة / أخصائية');
+  const letter = (user.full_name || 'م').charAt(0);
+
   const nameEl = document.getElementById('user-display-name');
   const roleEl = document.getElementById('user-display-role');
   const avatarEl = document.getElementById('user-avatar-letter');
+  if (nameEl) nameEl.textContent = user.full_name;
+  if (roleEl) roleEl.textContent = roleTitle;
+  if (avatarEl) avatarEl.textContent = letter;
 
-  if (nameEl) nameEl.textContent = state.user.full_name;
-  if (roleEl) roleEl.textContent = state.user.role === 'admin' ? 'مدير عام' : (state.user.role === 'accountant' ? 'مسؤول مالي' : 'معلمة / أخصائية');
-  if (avatarEl) avatarEl.textContent = (state.user.full_name || 'م').charAt(0);
+  // Sidebar Profile Card
+  const sbNameEl = document.getElementById('sidebar-user-name');
+  const sbRoleEl = document.getElementById('sidebar-user-role');
+  const sbAvatarEl = document.getElementById('sidebar-user-avatar');
+  if (sbNameEl) sbNameEl.textContent = user.full_name;
+  if (sbRoleEl) sbRoleEl.textContent = roleTitle;
+  if (sbAvatarEl) sbAvatarEl.textContent = letter;
+
+  // Apply Role Visibility Restrictions (Teacher vs Accountant vs Admin)
+  applyRoleVisibility(user);
+}
+
+function applyRoleVisibility(user) {
+  if (!user) return;
+  const isTeacher = user.role === 'teacher';
+  const isAccountant = user.role === 'accountant';
+
+  const financeHeader = document.getElementById('nav-header-finance');
+  const adminHeader = document.getElementById('nav-header-admin');
+  const payBtn = document.querySelector('button[data-page="payments"]');
+  const outBtn = document.querySelector('button[data-page="outstanding"]');
+  const expBtn = document.querySelector('button[data-page="expenses"]');
+  const payrBtn = document.querySelector('button[data-page="payroll"]');
+  const repBtn = document.querySelector('button[data-page="reports"]');
+  const auditBtn = document.querySelector('button[data-page="audit"]');
+  const setBtn = document.querySelector('button[data-page="settings"]');
+  const quickPay = document.getElementById('btn-quick-add-payment');
+
+  if (isTeacher) {
+    if (financeHeader) financeHeader.classList.add('hidden');
+    if (adminHeader) adminHeader.classList.add('hidden');
+    if (payBtn) payBtn.classList.add('hidden');
+    if (outBtn) outBtn.classList.add('hidden');
+    if (expBtn) expBtn.classList.add('hidden');
+    if (payrBtn) payrBtn.classList.add('hidden');
+    if (repBtn) repBtn.classList.add('hidden');
+    if (auditBtn) auditBtn.classList.add('hidden');
+    if (setBtn) setBtn.classList.add('hidden');
+    if (quickPay) quickPay.classList.add('hidden');
+  } else if (isAccountant) {
+    if (financeHeader) financeHeader.classList.remove('hidden');
+    if (payBtn) payBtn.classList.remove('hidden');
+    if (outBtn) outBtn.classList.remove('hidden');
+    if (expBtn) expBtn.classList.remove('hidden');
+    if (payrBtn) payrBtn.classList.remove('hidden');
+    if (repBtn) repBtn.classList.remove('hidden');
+    if (quickPay) quickPay.classList.remove('hidden');
+    if (adminHeader) adminHeader.classList.add('hidden');
+    if (auditBtn) auditBtn.classList.add('hidden');
+    if (setBtn) setBtn.classList.add('hidden');
+  } else {
+    // Admin: show all
+    if (financeHeader) financeHeader.classList.remove('hidden');
+    if (adminHeader) adminHeader.classList.remove('hidden');
+    if (payBtn) payBtn.classList.remove('hidden');
+    if (outBtn) outBtn.classList.remove('hidden');
+    if (expBtn) expBtn.classList.remove('hidden');
+    if (payrBtn) payrBtn.classList.remove('hidden');
+    if (repBtn) repBtn.classList.remove('hidden');
+    if (auditBtn) auditBtn.classList.remove('hidden');
+    if (setBtn) setBtn.classList.remove('hidden');
+    if (quickPay) quickPay.classList.remove('hidden');
+  }
 }
 
 function showLoginModal() {
@@ -433,9 +500,11 @@ async function renderDashboard(container) {
         <button id="btn-dash-add-student" class="btn bg-white text-teal-800 hover:bg-teal-50 text-xs font-bold shadow-sm">
           <span>+</span> <span>إضافة طفل</span>
         </button>
+        ${state.user?.role !== 'teacher' ? `
         <button id="btn-dash-add-payment" class="btn bg-teal-500 text-white hover:bg-teal-400 text-xs font-bold shadow-sm">
           <span>💵</span> <span>تسجيل دفعة</span>
         </button>
+        ` : ''}
       </div>
     </div>
 
@@ -489,10 +558,10 @@ async function renderDashboard(container) {
     </div>
 
     <!-- 2. ATTENDANCE & FINANCIAL SUMMARY ROW -->
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <div class="grid grid-cols-1 ${state.user?.role !== 'teacher' ? 'lg:grid-cols-3' : ''} gap-6">
 
       <!-- Today's Attendance Box -->
-      <div class="card p-5 bg-white">
+      <div class="card p-5 bg-white ${state.user?.role === 'teacher' ? 'col-span-full' : ''}">
         <div class="flex items-center justify-between mb-4">
           <h4 class="font-bold text-sm text-slate-800 flex items-center gap-2">
             <span>📅</span> <span>حضور اليوم</span>
@@ -500,7 +569,7 @@ async function renderDashboard(container) {
           <button onclick="navigateTo('attendance')" class="text-xs text-teal-600 hover:underline font-semibold">تسجيل الحضور</button>
         </div>
 
-        <div class="grid grid-cols-2 gap-3 mb-4">
+        <div class="grid grid-cols-2 ${state.user?.role === 'teacher' ? 'sm:grid-cols-4' : ''} gap-3 mb-4">
           <div class="bg-emerald-50 border border-emerald-100 rounded-2xl p-3 text-center">
             <span class="text-xs text-emerald-700 font-bold">حاضر</span>
             <div class="text-2xl font-black text-emerald-800 mt-0.5">${s.attendanceToday.present}</div>
@@ -525,6 +594,7 @@ async function renderDashboard(container) {
         </div>
       </div>
 
+      ${state.user?.role !== 'teacher' ? `
       <!-- Financial Statistics (2 columns span) -->
       <div class="card p-5 bg-white lg:col-span-2">
         <div class="flex items-center justify-between mb-4">
@@ -579,9 +649,11 @@ async function renderDashboard(container) {
           <button onclick="navigateTo('outstanding')" class="text-amber-600 font-bold hover:underline">متابعة المتأخرات وتذكير أولياء الأمور ←</button>
         </div>
       </div>
+      ` : ''}
 
     </div>
 
+    ${state.user?.role !== 'teacher' ? `
     <!-- 3. ALERTS & RECENT ACTIVITY TABLES -->
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
@@ -663,11 +735,12 @@ async function renderDashboard(container) {
       </div>
 
     </div>
+    ` : ''}
   `;
 
   // Bind Quick Actions
-  document.getElementById('btn-dash-add-student').addEventListener('click', openAddStudentModal);
-  document.getElementById('btn-dash-add-payment').addEventListener('click', openAddPaymentModal);
+  document.getElementById('btn-dash-add-student')?.addEventListener('click', openAddStudentModal);
+  document.getElementById('btn-dash-add-payment')?.addEventListener('click', openAddPaymentModal);
 }
 
 // ============================================================================
@@ -3319,10 +3392,14 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('btn-quick-add-student').addEventListener('click', openAddStudentModal);
   document.getElementById('btn-quick-add-payment').addEventListener('click', openAddPaymentModal);
 
-  // User Profile Modal Click
+  // User Profile Modal Click (Header + Sidebar)
   const userProfileBtn = document.getElementById('btn-user-profile');
   if (userProfileBtn) {
     userProfileBtn.addEventListener('click', openUserProfileModal);
+  }
+  const sbProfileBtn = document.getElementById('btn-sidebar-user-profile');
+  if (sbProfileBtn) {
+    sbProfileBtn.addEventListener('click', openUserProfileModal);
   }
 
   // Logout Button

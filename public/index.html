@@ -29,7 +29,7 @@
   </script>
 
   <!-- Cairo Font & Custom Styles -->
-  <link rel="stylesheet" href="/css/style.css">
+  <link rel="stylesheet" href="/css/style.css?v=1.2.0">
   
   <link rel="icon" type="image/jpeg" href="/images/logo.png">
 </head>
@@ -115,6 +115,18 @@
     <!-- SIDEBAR NAVIGATION -->
     <aside id="sidebar-nav" class="w-64 flex-shrink-0 bg-white rounded-2xl p-4 border border-slate-200 shadow-sm hidden md:flex flex-col gap-1.5 self-start sticky top-24 no-print">
       
+      <!-- User Profile Quick Card in Sidebar -->
+      <button id="btn-sidebar-user-profile" type="button" class="mb-2 p-2.5 rounded-xl bg-slate-50 hover:bg-teal-50 border border-slate-200/80 hover:border-teal-200 flex items-center justify-between text-right transition cursor-pointer group" title="فتح الملف الشخصي وتعديل كلمة المرور">
+        <div class="flex items-center gap-2.5 min-w-0">
+          <div class="w-8 h-8 rounded-full bg-teal-100 text-teal-700 flex items-center justify-center font-bold text-sm group-hover:bg-teal-600 group-hover:text-white transition" id="sidebar-user-avatar">م</div>
+          <div class="truncate">
+            <div class="text-xs font-bold text-slate-800" id="sidebar-user-name">مدير النظام</div>
+            <div class="text-[10px] text-teal-600" id="sidebar-user-role">مدير عام</div>
+          </div>
+        </div>
+        <span class="text-slate-400 group-hover:text-teal-600 text-xs font-bold">⚙️ تعديل</span>
+      </button>
+
       <div class="text-[11px] font-bold text-slate-400 uppercase px-3 py-1">الأقسام الرئيسية</div>
       
       <button data-page="dashboard" class="nav-item active flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-semibold text-teal-700 bg-teal-50 transition">
@@ -133,7 +145,7 @@
         <span>🗣️</span> <span>الجلسات والتخاطب</span>
       </button>
 
-      <div class="text-[11px] font-bold text-slate-400 uppercase px-3 py-1 mt-3">المالية والحسابات</div>
+      <div class="text-[11px] font-bold text-slate-400 uppercase px-3 py-1 mt-3" id="nav-header-finance">المالية والحسابات</div>
 
       <button data-page="payments" class="nav-item flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-semibold text-slate-600 hover:bg-slate-50 hover:text-teal-600 transition">
         <span>💵</span> <span>المقبوضات وسندات القبض</span>
@@ -155,7 +167,7 @@
         <span>📑</span> <span>التقارير المالية والتدفقات</span>
       </button>
 
-      <div class="text-[11px] font-bold text-slate-400 uppercase px-3 py-1 mt-3">الإدارة والنظام</div>
+      <div class="text-[11px] font-bold text-slate-400 uppercase px-3 py-1 mt-3" id="nav-header-admin">الإدارة والنظام</div>
 
       <button data-page="audit" class="nav-item flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-semibold text-slate-600 hover:bg-slate-50 hover:text-teal-600 transition">
         <span>🛡️</span> <span>سجل المراقبة والتدقيق</span>
@@ -191,6 +203,6 @@
   <div id="toast-container"></div>
 
   <!-- Application JS -->
-  <script src="/js/app.js"></script>
+  <script src="/js/app.js?v=1.2.0"></script>
 </body>
 </html>
