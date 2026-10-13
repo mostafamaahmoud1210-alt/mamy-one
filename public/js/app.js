@@ -1465,6 +1465,7 @@ async function openStudentProfileModal(studentId) {
         reader.readAsDataURL(file);
       });
     }
+  });
 }
 
 // ========================================================
