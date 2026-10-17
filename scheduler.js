@@ -2,10 +2,98 @@ const { db, getCairoNow, getCairoDate } = require('./db');
 const { logAudit } = require('./audit');
 
 /**
+ * Automatically generate monthly tuition charges for all active students for a given month.
+ * If targetMonth is not provided, defaults to current month (Africa/Cairo YYYY-MM).
+ */
+function generateMonthlyTuitionCharges(targetMonth = null) {
+  const today = getCairoDate(); // YYYY-MM-DD
+  const currentMonth = targetMonth || today.substring(0, 7); // YYYY-MM
+  const now = getCairoNow();
+
+  // Arabic Month Names helper
+  const [yearStr, monthStr] = currentMonth.split('-');
+  const monthNames = [
+    'يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو',
+    'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'
+  ];
+  const monthName = monthNames[parseInt(monthStr, 10) - 1] || currentMonth;
+
+  // Find all active students with monthly tuition > 0
+  const activeStudents = db.prepare(`
+    SELECT id, code, full_name, monthly_tuition, discount_amount, payment_due_day, enrollment_date
+    FROM students
+    WHERE status = 'active' AND monthly_tuition > 0
+  `).all();
+
+  let generatedCount = 0;
+  let skippedCount = 0;
+  const generatedList = [];
+
+  for (const st of activeStudents) {
+    // Only charge if student was enrolled on or before this month
+    const enrollMonth = (st.enrollment_date || '').substring(0, 7);
+    if (enrollMonth && enrollMonth > currentMonth) {
+      skippedCount++;
+      continue;
+    }
+
+    // Check if tuition charge already exists for this child in this billing month
+    const existing = db.prepare(`
+      SELECT id FROM student_charges
+      WHERE student_id = ? AND charge_type = 'tuition' AND billing_month = ?
+    `).get(st.id, currentMonth);
+
+    if (existing) {
+      skippedCount++;
+      continue;
+    }
+
+    const tuitionAmt = Number(st.monthly_tuition) || 0;
+    const disc = Math.max(0, Number(st.discount_amount) || 0);
+    const netAmt = Math.max(0, tuitionAmt - disc);
+    const dueDay = Math.min(28, Math.max(1, Number(st.payment_due_day) || 1));
+    const dueDate = `${currentMonth}-${String(dueDay).padStart(2, '0')}`;
+    const desc = `مصروفات شهرية (${monthName} ${yearStr})`;
+
+    db.prepare(`
+      INSERT INTO student_charges (
+        student_id, charge_type, description, amount, discount, net_amount,
+        charge_date, due_date, billing_month, status, paid_amount,
+        created_at, updated_at
+      ) VALUES (?, 'tuition', ?, ?, ?, ?, ?, ?, ?, 'unpaid', 0, ?, ?)
+    `).run(
+      st.id,
+      desc,
+      tuitionAmt,
+      disc,
+      netAmt,
+      `${currentMonth}-01`,
+      dueDate,
+      currentMonth,
+      now,
+      now
+    );
+
+    generatedCount++;
+    generatedList.push({ studentId: st.id, code: st.code, name: st.full_name, netAmt, dueDate });
+  }
+
+  return {
+    month: currentMonth,
+    monthName,
+    generatedCount,
+    skippedCount,
+    totalActive: activeStudents.length,
+    generatedList
+  };
+}
+
+/**
  * Run automated scheduled routines:
- * 1. Overdue tuition fees scan
- * 2. Upcoming payment deadlines (3 days ahead)
- * 3. Unpaid payroll obligations
+ * 1. Auto-generate monthly tuition charges for the current month
+ * 2. Overdue tuition fees scan
+ * 3. Upcoming payment deadlines (3 days ahead)
+ * 4. Unpaid payroll obligations
  */
 function runScheduledTasks() {
   const today = getCairoDate(); // 'YYYY-MM-DD'
@@ -17,6 +105,9 @@ function runScheduledTasks() {
   let unpaidSalariesCount = 0;
 
   try {
+    // 0. Auto-generate monthly tuition charges for active students if not yet created for this month
+    generateMonthlyTuitionCharges(currentMonthKey);
+
     // 1. Scan for Overdue Tuition:
     // Active students whose due day of the month <= currentDay, and have unpaid/partially paid charges
     const overdueStudents = db.prepare(`
@@ -153,5 +244,6 @@ function startScheduler() {
 
 module.exports = {
   runScheduledTasks,
-  startScheduler
+  startScheduler,
+  generateMonthlyTuitionCharges
 };

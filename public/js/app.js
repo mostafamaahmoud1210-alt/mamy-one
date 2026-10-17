@@ -158,6 +158,16 @@ function escapeJsString(str) {
     .replace(/"/g, '&quot;');
 }
 
+function escapeHtml(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
 // Modal Manager
 function openModal(title, contentHtml, onReady) {
   const container = document.getElementById('modal-container');
@@ -451,6 +461,9 @@ function navigateTo(page) {
       break;
     case 'students':
       renderStudents(main);
+      break;
+    case 'charges':
+      renderCharges(main);
       break;
     case 'payments':
       renderPayments(main);
@@ -781,6 +794,9 @@ async function renderStudents(container) {
         <p class="text-xs text-slate-500">إجمالي الأطفال المسجلين: <strong class="text-teal-600">${students.length}</strong> طفل</p>
       </div>
       <div class="flex items-center gap-2">
+        <button onclick="generateMonthlyTuitionNow()" class="px-3 py-2 rounded-xl border border-amber-200 bg-amber-50 hover:bg-amber-100 text-amber-800 text-xs font-bold transition flex items-center gap-1.5 shadow-xs" title="توليد وتأكيد استحقاق الرسوم الشهرية للشهر الحالي لكافة الأطفال النشطين">
+          <span>⚡</span> <span>استحقاق الشهر الجديد</span>
+        </button>
         <button id="btn-card-designer-page" class="px-3 py-2 rounded-xl border border-teal-200 bg-teal-50 hover:bg-teal-100 text-teal-800 text-xs font-bold transition flex items-center gap-1.5 shadow-xs">
           <span>🪪</span> <span>مصمم كارنيهات الأطفال</span>
         </button>
@@ -903,9 +919,15 @@ async function renderStudents(container) {
                 </td>
                 <td class="p-3.5">${getStatusBadge(s.status)}</td>
                 <td class="p-3.5 text-center">
-                  <div class="flex items-center justify-center gap-1.5">
-                    <button onclick="openStudentProfileModal(${s.id})" class="px-2.5 py-1.5 rounded-lg bg-teal-50 text-teal-700 hover:bg-teal-100 font-bold transition">
-                      الملف الشامل
+                  <div class="flex items-center justify-center gap-1">
+                    <button onclick="openStudentProfileModal(${s.id})" class="px-2 py-1.5 rounded-lg bg-teal-50 text-teal-700 hover:bg-teal-100 font-bold transition text-xs">
+                      الملف
+                    </button>
+                    <button onclick="openEditStudentModal(${s.id})" title="تعديل بيانات الطفل" class="p-1.5 rounded-lg bg-sky-50 text-sky-700 hover:bg-sky-100 transition font-bold">
+                      ✏️
+                    </button>
+                    <button onclick="openAddChargeModal(${s.id})" title="إضافة رسم مالي إضافي للطفل" class="p-1.5 rounded-lg bg-indigo-50 text-indigo-700 hover:bg-indigo-100 transition font-bold">
+                      ➕
                     </button>
                     <button onclick="openStudentIdCardModal(${s.id})" title="تصميم وطباعة كارنيه الطفل" class="p-1.5 rounded-lg bg-amber-50 text-amber-700 hover:bg-amber-100 transition font-bold">
                       🪪
@@ -1290,7 +1312,13 @@ async function openStudentProfileModal(studentId) {
           <div class="text-xl font-black ${f.balance > 0 ? 'text-rose-600' : 'text-emerald-600'} mt-0.5">
             ${f.balance > 0 ? formatEGP(f.balance) : 'خالص ✓'}
           </div>
-          <div class="flex items-center gap-2 mt-2">
+          <div class="flex flex-wrap items-center justify-center sm:justify-end gap-1.5 mt-2">
+            <button onclick="openEditStudentModal(${s.id})" class="px-2.5 py-1.5 rounded-xl border border-sky-200 bg-sky-50 text-sky-800 hover:bg-sky-100 font-bold text-xs transition flex items-center gap-1 shadow-xs" title="تعديل بيانات الطفل الأساسية والمالية">
+              ✏️ تعديل البيانات
+            </button>
+            <button onclick="openAddChargeModal(${s.id})" class="px-2.5 py-1.5 rounded-xl border border-indigo-200 bg-indigo-50 text-indigo-800 hover:bg-indigo-100 font-bold text-xs transition flex items-center gap-1 shadow-xs" title="إضافة رسم مالي أو التزام جديد على الطفل">
+              ➕ إضافة رسم مالي
+            </button>
             <button onclick="closeModal(); openAddPaymentModalForStudent(${s.id})" class="btn btn-primary text-xs py-1.5 px-3">
               + تسجيل دفعة
             </button>
@@ -1344,26 +1372,55 @@ async function openStudentProfileModal(studentId) {
 
           <!-- Charges table -->
           <div class="mb-4">
-            <div class="text-[11px] font-bold text-slate-500 mb-1">المطالبات والرسوم المسجلة:</div>
+            <div class="flex items-center justify-between mb-2">
+              <div class="text-[11px] font-bold text-slate-700 flex items-center gap-1">
+                <span>📋</span> <span>المطالبات والرسوم المسجلة (الالتزامات المالية):</span>
+              </div>
+              <button onclick="openAddChargeModal(${s.id})" class="px-2.5 py-1 rounded-lg bg-teal-50 text-teal-700 hover:bg-teal-100 text-[11px] font-bold transition flex items-center gap-1 border border-teal-200 shadow-xs">
+                <span>+</span> <span>إضافة رسم مالي جديد</span>
+              </button>
+            </div>
             <div class="overflow-x-auto rounded-xl border border-slate-100">
               <table class="w-full text-right text-xs">
                 <thead class="bg-slate-50 text-slate-600 font-semibold">
                   <tr>
                     <th class="p-2.5">البيان</th>
-                    <th class="p-2.5">المبلغ</th>
+                    <th class="p-2.5">المبلغ الأصلي</th>
+                    <th class="p-2.5">الخصم</th>
+                    <th class="p-2.5">الصافي</th>
                     <th class="p-2.5">المدفوع</th>
                     <th class="p-2.5">تاريخ الاستحقاق</th>
                     <th class="p-2.5">الحالة</th>
+                    <th class="p-2.5 text-center">إجراءات</th>
                   </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-100">
-                  ${charges.map(c => `
+                  ${charges.length === 0 ? `
+                    <tr><td colspan="8" class="p-4 text-center text-slate-400">لا توجد رسوم أو التزامات مسجلة لهذا الطفل</td></tr>
+                  ` : charges.map(c => `
                     <tr>
-                      <td class="p-2.5 font-medium text-slate-800">${c.description}</td>
-                      <td class="p-2.5 font-bold">${formatEGP(c.net_amount)}</td>
+                      <td class="p-2.5 font-medium text-slate-800">
+                        <div>${c.description}</div>
+                        ${c.billing_month ? `<span class="text-[10px] text-slate-400 font-mono">شهر: ${c.billing_month}</span>` : ''}
+                      </td>
+                      <td class="p-2.5 text-slate-600">${formatEGP(c.amount)}</td>
+                      <td class="p-2.5 text-slate-400">${c.discount > 0 ? formatEGP(c.discount) : '-'}</td>
+                      <td class="p-2.5 font-bold text-slate-900">${formatEGP(c.net_amount)}</td>
                       <td class="p-2.5 text-emerald-600 font-semibold">${formatEGP(c.paid_amount)}</td>
                       <td class="p-2.5 text-slate-500">${c.due_date}</td>
                       <td class="p-2.5">${getStatusBadge(c.status)}</td>
+                      <td class="p-2.5 text-center">
+                        <div class="flex items-center justify-center gap-1">
+                          <button onclick="openEditChargeModal(${c.id}, ${s.id})" title="تعديل هذا الرسم" class="p-1 rounded-lg bg-sky-50 text-sky-700 hover:bg-sky-100 font-bold transition">
+                            ✏️
+                          </button>
+                          ${Number(c.paid_amount) === 0 ? `
+                            <button onclick="confirmDeleteCharge(${c.id}, ${s.id}, '${escapeJsString(c.description)}')" title="حذف هذا الرسم" class="p-1 rounded-lg bg-rose-50 text-rose-600 hover:bg-rose-100 font-bold transition">
+                              🗑️
+                            </button>
+                          ` : ''}
+                        </div>
+                      </td>
                     </tr>
                   `).join('')}
                 </tbody>
@@ -1478,6 +1535,858 @@ async function openStudentProfileModal(studentId) {
       });
     }
   });
+}
+
+// ============================================================================
+// STUDENT EDIT MODAL (تعديل بيانات الطفل الشاملة)
+// ============================================================================
+async function openEditStudentModal(studentId) {
+  const res = await api(`/api/students/${studentId}`);
+  const classRes = await api('/api/classrooms');
+  const empRes = await api('/api/employees');
+
+  if (!res || !res.success) {
+    showToast('تعذر تحميل بيانات الطفل', 'error');
+    return;
+  }
+
+  const s = res.student;
+  const classrooms = classRes ? classRes.classrooms : [];
+  const employees = empRes ? empRes.employees : [];
+  const primaryG = (res.guardians || []).find(g => g.is_primary) || (res.guardians || [])[0] || {};
+
+  const content = `
+    <form id="edit-student-form" class="space-y-4">
+      
+      <!-- Child Photo Selection -->
+      <div class="flex flex-col sm:flex-row items-center gap-4 p-3.5 bg-slate-50 border border-slate-200 rounded-2xl">
+        <div class="relative">
+          <div id="est-photo-preview" class="w-20 h-20 rounded-2xl bg-white border border-teal-200 shadow-sm flex items-center justify-center text-4xl overflow-hidden text-teal-600">
+            ${s.photo ? `<img src="${s.photo}" class="w-full h-full object-cover">` : (s.gender === 'أنثى' ? '👧' : '👦')}
+          </div>
+          <button type="button" id="est-photo-remove" class="${s.photo ? 'flex' : 'hidden'} absolute -top-1.5 -right-1.5 w-6 h-6 bg-rose-500 hover:bg-rose-600 text-white rounded-full text-xs font-bold items-center justify-center shadow transition" title="إزالة الصورة">✕</button>
+        </div>
+        <div class="flex-1 text-center sm:text-right">
+          <div class="text-xs font-bold text-slate-800">صورة الطفل الشخصية</div>
+          <div class="text-[11px] text-slate-500 mt-0.5">يمكنك تغيير أو تحديث صورة الطفل</div>
+          <div class="mt-2 flex items-center justify-center sm:justify-start gap-2">
+            <label class="cursor-pointer inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-teal-50 text-teal-700 hover:bg-teal-100 font-bold text-xs border border-teal-200 transition">
+              <span>📷</span>
+              <span>تغيير صورة الطفل</span>
+              <input type="file" id="est-photo-input" accept="image/*" class="hidden">
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">اسم الطفل بالكامل *</label>
+          <input type="text" id="est-name" value="${escapeHtml(s.full_name)}" required class="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs focus:border-teal-500 outline-none">
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">النوع / الجنس</label>
+          <select id="est-gender" class="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs focus:border-teal-500 outline-none bg-white">
+            <option value="ذكر" ${s.gender === 'ذكر' ? 'selected' : ''}>ذكر</option>
+            <option value="أنثى" ${s.gender === 'أنثى' ? 'selected' : ''}>أنثى</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">تاريخ الميلاد *</label>
+          <input type="date" id="est-dob" value="${s.dob}" required class="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs focus:border-teal-500 outline-none">
+          <div id="est-age-preview" class="text-[11px] text-teal-600 mt-1 font-semibold">العمر الحالي: ${calculateAge(s.dob)}</div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">تاريخ الالتحاق *</label>
+          <input type="date" id="est-enrollment" value="${s.enrollment_date}" required class="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs focus:border-teal-500 outline-none">
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">حالة القيد والانتظام</label>
+          <select id="est-status" class="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs focus:border-teal-500 outline-none bg-white font-bold text-slate-800">
+            <option value="active" ${s.status === 'active' ? 'selected' : ''}>نشط ومنتظم</option>
+            <option value="suspended" ${s.status === 'suspended' ? 'selected' : ''}>موقوف مؤقتاً</option>
+            <option value="withdrawn" ${s.status === 'withdrawn' ? 'selected' : ''}>منسحب</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">تصنيف الطفل *</label>
+          <select id="est-classification" class="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs focus:border-teal-500 outline-none bg-white font-bold text-slate-800">
+            <option value="regular" ${s.classification === 'regular' ? 'selected' : ''}>طفل طبيعي (Regular)</option>
+            <option value="learning_difficulties" ${s.classification === 'learning_difficulties' ? 'selected' : ''}>صعوبات تعلم (Learning Support)</option>
+            <option value="speech_therapy" ${s.classification === 'speech_therapy' ? 'selected' : ''}>تخاطب (Speech Therapy)</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">الفصل / القاعة الدراسية</label>
+          <select id="est-classroom" class="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs focus:border-teal-500 outline-none bg-white">
+            <option value="">بدون قاعة محددة</option>
+            ${classrooms.map(c => `
+              <option value="${c.id}" ${s.classroom_id === c.id ? 'selected' : ''}>${c.name}</option>
+            `).join('')}
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">المعلمة المشرفة</label>
+          <select id="est-teacher" class="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs focus:border-teal-500 outline-none bg-white">
+            <option value="">بدون معلمة محددة</option>
+            ${employees.map(e => `
+              <option value="${e.id}" ${s.teacher_id === e.id ? 'selected' : ''}>${e.full_name} (${e.job_title || 'معلمة'})</option>
+            `).join('')}
+          </select>
+        </div>
+      </div>
+
+      <!-- Financial Settings -->
+      <div class="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl space-y-3">
+        <div class="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+          <span>💵</span> <span>المصروفات الشهرية وإعدادات الاستحقاق</span>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div>
+            <label class="block text-xs text-slate-600 mb-1">المصروفات الشهرية (ج.م) *</label>
+            <input type="number" id="est-tuition" min="0" step="any" value="${s.monthly_tuition || 0}" required class="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs focus:border-teal-500 outline-none font-bold">
+          </div>
+          <div>
+            <label class="block text-xs text-slate-600 mb-1">يوم الاستحقاق الشهري (1-28)</label>
+            <input type="number" id="est-due-day" min="1" max="28" value="${s.payment_due_day || 1}" class="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs focus:border-teal-500 outline-none">
+          </div>
+          <div>
+            <label class="block text-xs text-slate-600 mb-1">قيمة الخصم الشهري (ج.م)</label>
+            <input type="number" id="est-discount" min="0" step="any" value="${s.discount_amount || 0}" class="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs focus:border-teal-500 outline-none">
+          </div>
+        </div>
+        <div>
+          <label class="block text-xs text-slate-600 mb-1">سبب الخصم (منحة / أخوة / ظرف خاص)</label>
+          <input type="text" id="est-discount-reason" value="${escapeHtml(s.discount_reason || '')}" class="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs focus:border-teal-500 outline-none" placeholder="اختياري">
+        </div>
+      </div>
+
+      <!-- Primary Guardian -->
+      <div class="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl space-y-3">
+        <div class="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+          <span>👨‍👩‍👧</span> <span>بيانات ولي الأمر الأساسي</span>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs text-slate-600 mb-1">اسم ولي الأمر</label>
+            <input type="text" id="est-g-name" value="${escapeHtml(primaryG.full_name || '')}" class="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs focus:border-teal-500 outline-none" placeholder="الاسم بالكامل">
+          </div>
+          <div>
+            <label class="block text-xs text-slate-600 mb-1">صلة القرابة</label>
+            <select id="est-g-rel" class="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs focus:border-teal-500 outline-none bg-white">
+              <option value="أب" ${primaryG.relationship === 'أب' ? 'selected' : ''}>أب</option>
+              <option value="أم" ${primaryG.relationship === 'أم' ? 'selected' : ''}>أم</option>
+              <option value="ولي أمر" ${primaryG.relationship && primaryG.relationship !== 'أب' && primaryG.relationship !== 'أم' ? 'selected' : ''}>ولي أمر آخر</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs text-slate-600 mb-1">رقم الهاتف الأساسي / واتساب</label>
+            <input type="tel" id="est-g-mobile" value="${escapeHtml(primaryG.mobile || '')}" class="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs focus:border-teal-500 outline-none" placeholder="010xxxxxxxx">
+          </div>
+          <div>
+            <label class="block text-xs text-slate-600 mb-1">رقم بديل للطوارئ</label>
+            <input type="tel" id="est-g-mobile-sec" value="${escapeHtml(primaryG.mobile_secondary || '')}" class="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs focus:border-teal-500 outline-none" placeholder="اختياري">
+          </div>
+        </div>
+        <div>
+          <label class="block text-xs text-slate-600 mb-1">العنوان بالتفصيل</label>
+          <input type="text" id="est-g-address" value="${escapeHtml(primaryG.address || '')}" class="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs focus:border-teal-500 outline-none" placeholder="المنطقة - الشارع - رقم العقار">
+        </div>
+      </div>
+
+      <div>
+        <label class="block text-xs font-semibold text-slate-700 mb-1">ملاحظات طبية أو تربوية</label>
+        <textarea id="est-medical" rows="2" class="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs focus:border-teal-500 outline-none">${escapeHtml(s.medical_notes || '')}</textarea>
+      </div>
+
+      <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+        <button type="button" onclick="closeModal()" class="btn btn-secondary text-xs">إلغاء</button>
+        <button type="submit" class="btn btn-primary text-xs font-bold">💾 حفظ التعديلات</button>
+      </div>
+    </form>
+  `;
+
+  openLargeModal(`تعديل بيانات الطفل: ${s.full_name} (#${s.code})`, content, () => {
+    let studentPhotoDataUrl = s.photo || null;
+    let photoRemoved = false;
+    const photoInput = document.getElementById('est-photo-input');
+    const photoPreview = document.getElementById('est-photo-preview');
+    const photoRemove = document.getElementById('est-photo-remove');
+    const genderSelect = document.getElementById('est-gender');
+
+    if (photoInput) {
+      photoInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+          const img = new Image();
+          img.onload = () => {
+            const maxDim = 320;
+            let w = img.width, h = img.height;
+            if (w > maxDim || h > maxDim) {
+              if (w > h) { h = Math.round((h * maxDim) / w); w = maxDim; }
+              else { w = Math.round((w * maxDim) / h); h = maxDim; }
+            }
+            const canvas = document.createElement('canvas');
+            canvas.width = w; canvas.height = h;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, w, h);
+            studentPhotoDataUrl = canvas.toDataURL('image/jpeg', 0.85);
+            photoRemoved = false;
+            photoPreview.innerHTML = `<img src="${studentPhotoDataUrl}" class="w-full h-full object-cover">`;
+            photoRemove.classList.remove('hidden');
+            photoRemove.classList.add('flex');
+          };
+          img.src = ev.target.result;
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+
+    if (photoRemove) {
+      photoRemove.addEventListener('click', () => {
+        studentPhotoDataUrl = null;
+        photoRemoved = true;
+        if (photoInput) photoInput.value = '';
+        photoPreview.innerHTML = (genderSelect && genderSelect.value === 'أنثى') ? '👧' : '👦';
+        photoRemove.classList.add('hidden');
+        photoRemove.classList.remove('flex');
+      });
+    }
+
+    const dobInput = document.getElementById('est-dob');
+    const agePreview = document.getElementById('est-age-preview');
+    dobInput.addEventListener('change', () => {
+      agePreview.textContent = 'العمر المحسوب: ' + calculateAge(dobInput.value);
+    });
+
+    document.getElementById('edit-student-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const payload = {
+        full_name: document.getElementById('est-name').value.trim(),
+        gender: document.getElementById('est-gender').value,
+        dob: document.getElementById('est-dob').value,
+        enrollment_date: document.getElementById('est-enrollment').value,
+        status: document.getElementById('est-status').value,
+        classification: document.getElementById('est-classification').value,
+        classroom_id: document.getElementById('est-classroom').value ? Number(document.getElementById('est-classroom').value) : null,
+        teacher_id: document.getElementById('est-teacher').value ? Number(document.getElementById('est-teacher').value) : null,
+        monthly_tuition: Number(document.getElementById('est-tuition').value),
+        payment_due_day: Number(document.getElementById('est-due-day').value),
+        discount_amount: Number(document.getElementById('est-discount').value || 0),
+        discount_reason: document.getElementById('est-discount-reason').value.trim(),
+        guardian_name: document.getElementById('est-g-name').value.trim(),
+        guardian_relationship: document.getElementById('est-g-rel').value,
+        guardian_mobile: document.getElementById('est-g-mobile').value.trim(),
+        guardian_mobile_secondary: document.getElementById('est-g-mobile-sec').value.trim(),
+        guardian_address: document.getElementById('est-g-address').value.trim(),
+        medical_notes: document.getElementById('est-medical').value.trim()
+      };
+
+      if (photoRemoved) {
+        payload.photo = null;
+      } else if (studentPhotoDataUrl && studentPhotoDataUrl !== s.photo) {
+        payload.photo = studentPhotoDataUrl;
+      }
+
+      const updateRes = await api(`/api/students/${studentId}`, {
+        method: 'PUT',
+        body: JSON.stringify(payload)
+      });
+
+      if (updateRes && updateRes.success) {
+        showToast('تم تحديث بيانات الطفل بنجاح', 'success');
+        closeModal();
+        if (state.currentPage === 'students') {
+          renderStudents(document.getElementById('app-content'));
+        } else if (state.currentPage === 'charges') {
+          renderCharges(document.getElementById('app-content'));
+        }
+      } else {
+        showToast(updateRes ? updateRes.error : 'فشل تحديث بيانات الطفل', 'error');
+      }
+    });
+  });
+}
+
+// ============================================================================
+// ADD CUSTOM / PRESET FINANCIAL CHARGE MODAL (إضافة رسم مالي أو التزام جديد)
+// ============================================================================
+async function openAddChargeModal(studentId = null) {
+  let targetStudent = null;
+  let students = [];
+
+  if (studentId) {
+    const sRes = await api(`/api/students/${studentId}`);
+    if (sRes && sRes.success) targetStudent = sRes.student;
+  } else {
+    const sRes = await api('/api/students');
+    if (sRes && sRes.success) students = sRes.students.filter(s => s.status === 'active');
+  }
+
+  const today = new Date().toISOString().substring(0, 10);
+  const currentMonth = today.substring(0, 7);
+
+  const presets = [
+    { type: 'bus', label: '🚌 اشتراك باص / توصيل شهري', defaultDesc: `اشتراك باص وتوصيل (${currentMonth})` },
+    { type: 'uniform', label: '👕 زي مدرسي موحد', defaultDesc: 'زي مدرسي موحد كامل' },
+    { type: 'books', label: '📚 كتب وأدوات تعليمية', defaultDesc: 'باقة الكتب والمذكرات والأدوات التعليمية' },
+    { type: 'activities', label: '🎨 أنشطة ورحلات ترفيهية', defaultDesc: 'اشتراك رحلة ونشاط ترفيهي' },
+    { type: 'evaluation', label: '🧠 جلسة تقييم واختبار ذكاء/نطق', defaultDesc: 'جلسة تقييم شامل واختبار نطق وذكاء' },
+    { type: 'tuition', label: '🏫 مصروفات دراسية إضافية', defaultDesc: `مصروفات دراسية (${currentMonth})` },
+    { type: 'registration', label: '📝 رسوم تسجيل وقبول', defaultDesc: 'رسوم ملف وتسجيل وقبول جديد' },
+    { type: 'custom', label: '✨ رسم مالي مخصص / التزام آخر', defaultDesc: '' }
+  ];
+
+  const content = `
+    <form id="add-charge-form" class="space-y-4">
+      
+      ${targetStudent ? `
+        <div class="p-3 bg-teal-50 border border-teal-100 rounded-2xl flex items-center justify-between text-xs">
+          <div>
+            <span class="text-slate-500">الطفل المستفيد:</span>
+            <strong class="text-teal-900 mr-1 text-sm">${targetStudent.full_name}</strong>
+            <span class="font-mono text-teal-700 bg-white px-2 py-0.5 rounded-md border border-teal-200 mr-2">#${targetStudent.code}</span>
+          </div>
+          <div class="text-slate-500">${targetStudent.classroom_name || 'بدون قاعة'}</div>
+        </div>
+      ` : `
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">اختر الطفل المستحق عليه الرسم *</label>
+          <select id="ach-student-id" required class="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs focus:border-teal-500 outline-none bg-white font-bold text-slate-800">
+            <option value="">-- اختر طفلاً من القائمة --</option>
+            ${students.map(st => `
+              <option value="${st.id}">#${st.code} - ${st.full_name} (${st.classroom_name || 'بدون قاعة'})</option>
+            `).join('')}
+          </select>
+        </div>
+      `}
+
+      <div>
+        <label class="block text-xs font-semibold text-slate-700 mb-1">نوع البند المالي / التصنيف *</label>
+        <select id="ach-category" class="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs focus:border-teal-500 outline-none bg-white font-semibold text-slate-800">
+          ${presets.map(p => `
+            <option value="${p.type}" data-desc="${p.defaultDesc}">${p.label}</option>
+          `).join('')}
+        </select>
+      </div>
+
+      <div>
+        <label class="block text-xs font-semibold text-slate-700 mb-1">البيان والشرح التفصيلي *</label>
+        <input type="text" id="ach-desc" value="${presets[0].defaultDesc}" required class="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs focus:border-teal-500 outline-none font-medium" placeholder="مثال: اشتراك باص شهر أكتوبر">
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 p-3.5 bg-slate-50 border border-slate-200 rounded-2xl">
+        <div>
+          <label class="block text-xs text-slate-600 mb-1">المبلغ الإجمالي (ج.م) *</label>
+          <input type="number" id="ach-amount" min="1" step="any" required class="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs focus:border-teal-500 outline-none font-bold" placeholder="0">
+        </div>
+        <div>
+          <label class="block text-xs text-slate-600 mb-1">قيمة الخصم إن وجد (ج.م)</label>
+          <input type="number" id="ach-discount" min="0" step="any" value="0" class="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs focus:border-teal-500 outline-none" placeholder="0">
+        </div>
+        <div>
+          <label class="block text-xs text-slate-600 mb-1">صافي المبلغ المطلوب</label>
+          <div id="ach-net-preview" class="w-full px-3 py-2 rounded-xl bg-white border border-teal-200 text-xs font-black text-teal-700 flex items-center justify-between">
+            <span>0</span> <span>ج.م</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">شهر الاستحقاق</label>
+          <input type="month" id="ach-month" value="${currentMonth}" class="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs focus:border-teal-500 outline-none bg-white">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">تاريخ الاستحقاق النهائي *</label>
+          <input type="date" id="ach-due-date" value="${today}" required class="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs focus:border-teal-500 outline-none bg-white">
+        </div>
+      </div>
+
+      <div>
+        <label class="block text-xs font-semibold text-slate-700 mb-1">ملاحظات إضافية (اختياري)</label>
+        <input type="text" id="ach-notes" class="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs focus:border-teal-500 outline-none" placeholder="أي تفاصيل خاصة بهذا الرسم...">
+      </div>
+
+      <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+        <button type="button" onclick="closeModal()" class="btn btn-secondary text-xs">إلغاء</button>
+        <button type="submit" class="btn btn-primary text-xs font-bold">➕ إضافة وحفظ الرسم</button>
+      </div>
+    </form>
+  `;
+
+  openModal('إضافة رسم مالي أو التزام جديد', content, () => {
+    const catSelect = document.getElementById('ach-category');
+    const descInput = document.getElementById('ach-desc');
+    const amtInput = document.getElementById('ach-amount');
+    const discInput = document.getElementById('ach-discount');
+    const netPreview = document.getElementById('ach-net-preview');
+
+    function updateNet() {
+      const amt = Number(amtInput.value) || 0;
+      const disc = Number(discInput.value) || 0;
+      const net = Math.max(0, amt - disc);
+      netPreview.innerHTML = `<span>${formatEGP(net)}</span>`;
+    }
+
+    catSelect.addEventListener('change', () => {
+      const selectedOption = catSelect.options[catSelect.selectedIndex];
+      const defaultDesc = selectedOption.getAttribute('data-desc');
+      if (defaultDesc) {
+        descInput.value = defaultDesc;
+      }
+    });
+
+    amtInput.addEventListener('input', updateNet);
+    discInput.addEventListener('input', updateNet);
+
+    document.getElementById('add-charge-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const actualStudentId = targetStudent ? targetStudent.id : Number(document.getElementById('ach-student-id').value);
+      if (!actualStudentId) {
+        showToast('يرجى تحديد الطفل أولاً', 'error');
+        return;
+      }
+
+      const amount = Number(amtInput.value);
+      const discount = Number(discInput.value) || 0;
+      if (amount <= 0) {
+        showToast('يجب أن يكون المبلغ أكبر من صفر', 'error');
+        return;
+      }
+
+      const payload = {
+        charge_type: catSelect.value,
+        description: descInput.value.trim(),
+        amount,
+        discount,
+        billing_month: document.getElementById('ach-month').value || null,
+        due_date: document.getElementById('ach-due-date').value,
+        notes: document.getElementById('ach-notes').value.trim() || null
+      };
+
+      const resPost = await api(`/api/students/${actualStudentId}/charges`, {
+        method: 'POST',
+        body: JSON.stringify(payload)
+      });
+
+      if (resPost && resPost.success) {
+        showToast('تم تسجيل الرسم المالي بنجاح', 'success');
+        closeModal();
+        if (targetStudent) {
+          openStudentProfileModal(actualStudentId);
+        } else if (state.currentPage === 'charges') {
+          renderCharges(document.getElementById('app-content'));
+        } else if (state.currentPage === 'students') {
+          renderStudents(document.getElementById('app-content'));
+        }
+      } else {
+        showToast(resPost ? resPost.error : 'فشل تسجيل الرسم المالي', 'error');
+      }
+    });
+  });
+}
+
+// ============================================================================
+// EDIT FINANCIAL CHARGE MODAL (تعديل التزام مالي)
+// ============================================================================
+async function openEditChargeModal(chargeId, studentId = null) {
+  const res = await api(`/api/charges?student_id=${studentId || ''}`);
+  let charge = (res && res.charges) ? res.charges.find(c => c.id === chargeId) : null;
+  if (!charge && studentId) {
+    const sRes = await api(`/api/students/${studentId}`);
+    charge = (sRes && sRes.charges) ? sRes.charges.find(c => c.id === chargeId) : null;
+  }
+
+  if (!charge) {
+    showToast('تعذر العثور على بيانات الالتزام المالي', 'error');
+    return;
+  }
+
+  const content = `
+    <form id="edit-charge-form" class="space-y-4">
+      
+      <div class="p-3 bg-slate-50 border border-slate-200 rounded-2xl flex items-center justify-between text-xs">
+        <div>
+          <span class="text-slate-500">حالة السداد الحالية:</span>
+          <span class="mr-1">${getStatusBadge(charge.status)}</span>
+        </div>
+        <div class="font-bold text-slate-700">
+          المسدد فعلياً: <strong class="text-emerald-600">${formatEGP(charge.paid_amount)}</strong>
+        </div>
+      </div>
+
+      <div>
+        <label class="block text-xs font-semibold text-slate-700 mb-1">البيان والشرح *</label>
+        <input type="text" id="ech-desc" value="${escapeHtml(charge.description)}" required class="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs focus:border-teal-500 outline-none font-medium">
+      </div>
+
+      <div>
+        <label class="block text-xs font-semibold text-slate-700 mb-1">نوع الرسم / التصنيف</label>
+        <select id="ech-type" class="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs focus:border-teal-500 outline-none bg-white">
+          <option value="tuition" ${charge.charge_type === 'tuition' ? 'selected' : ''}>مصروفات دراسية شهرية</option>
+          <option value="bus" ${charge.charge_type === 'bus' ? 'selected' : ''}>اشتراك باص وتوصيل</option>
+          <option value="uniform" ${charge.charge_type === 'uniform' ? 'selected' : ''}>زي مدرسي موحد</option>
+          <option value="books" ${charge.charge_type === 'books' ? 'selected' : ''}>كتب وأدوات تعليمية</option>
+          <option value="activities" ${charge.charge_type === 'activities' ? 'selected' : ''}>أنشطة ورحلات ترفيهية</option>
+          <option value="evaluation" ${charge.charge_type === 'evaluation' ? 'selected' : ''}>جلسة تقييم واختبار ذكاء/نطق</option>
+          <option value="registration" ${charge.charge_type === 'registration' ? 'selected' : ''}>رسوم تسجيل وقبول</option>
+          <option value="custom" ${charge.charge_type === 'custom' || !['tuition','bus','uniform','books','activities','evaluation','registration'].includes(charge.charge_type) ? 'selected' : ''}>رسم مالي مخصص / التزام آخر</option>
+        </select>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 p-3.5 bg-slate-50 border border-slate-200 rounded-2xl">
+        <div>
+          <label class="block text-xs text-slate-600 mb-1">المبلغ الإجمالي (ج.م) *</label>
+          <input type="number" id="ech-amount" min="1" step="any" value="${charge.amount}" required class="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs focus:border-teal-500 outline-none font-bold">
+        </div>
+        <div>
+          <label class="block text-xs text-slate-600 mb-1">قيمة الخصم (ج.م)</label>
+          <input type="number" id="ech-discount" min="0" step="any" value="${charge.discount || 0}" class="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs focus:border-teal-500 outline-none">
+        </div>
+        <div>
+          <label class="block text-xs text-slate-600 mb-1">صافي المبلغ المطلوب</label>
+          <div id="ech-net-preview" class="w-full px-3 py-2 rounded-xl bg-white border border-teal-200 text-xs font-black text-teal-700 flex items-center justify-between">
+            <span>${formatEGP(charge.net_amount)}</span>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <label class="block text-xs font-semibold text-slate-700 mb-1">تاريخ الاستحقاق النهائي *</label>
+        <input type="date" id="ech-due-date" value="${charge.due_date}" required class="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs focus:border-teal-500 outline-none bg-white">
+      </div>
+
+      <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+        <button type="button" onclick="closeModal()" class="btn btn-secondary text-xs">إلغاء</button>
+        <button type="submit" class="btn btn-primary text-xs font-bold">💾 حفظ التعديلات</button>
+      </div>
+    </form>
+  `;
+
+  openModal('تعديل الالتزام المالي', content, () => {
+    const amtInput = document.getElementById('ech-amount');
+    const discInput = document.getElementById('ech-discount');
+    const netPreview = document.getElementById('ech-net-preview');
+
+    function updateNet() {
+      const amt = Number(amtInput.value) || 0;
+      const disc = Number(discInput.value) || 0;
+      const net = Math.max(0, amt - disc);
+      netPreview.innerHTML = `<span>${formatEGP(net)}</span>`;
+    }
+
+    amtInput.addEventListener('input', updateNet);
+    discInput.addEventListener('input', updateNet);
+
+    document.getElementById('edit-charge-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const amount = Number(amtInput.value);
+      const discount = Number(discInput.value) || 0;
+      const net = Math.max(0, amount - discount);
+
+      if (net < Number(charge.paid_amount)) {
+        showToast(`لا يمكن أن يكون صافي المبلغ (${formatEGP(net)}) أقل من المسدد (${formatEGP(charge.paid_amount)})`, 'error');
+        return;
+      }
+
+      const payload = {
+        description: document.getElementById('ech-desc').value.trim(),
+        charge_type: document.getElementById('ech-type').value,
+        amount,
+        discount,
+        due_date: document.getElementById('ech-due-date').value
+      };
+
+      const putRes = await api(`/api/charges/${chargeId}`, {
+        method: 'PUT',
+        body: JSON.stringify(payload)
+      });
+
+      if (putRes && putRes.success) {
+        showToast('تم تعديل الالتزام المالي بنجاح', 'success');
+        closeModal();
+        if (studentId) {
+          openStudentProfileModal(studentId);
+        } else if (state.currentPage === 'charges') {
+          renderCharges(document.getElementById('app-content'));
+        } else if (state.currentPage === 'students') {
+          renderStudents(document.getElementById('app-content'));
+        }
+      } else {
+        showToast(putRes ? putRes.error : 'فشل تعديل الالتزام المالي', 'error');
+      }
+    });
+  });
+}
+
+// ============================================================================
+// DELETE FINANCIAL CHARGE (حذف التزام مالي غير مدفوع)
+// ============================================================================
+async function confirmDeleteCharge(chargeId, studentId, description) {
+  if (!confirm(`هل أنت متأكد من حذف الالتزام المالي:\n"${description}"؟\n(لن تتأثر أي بيانات أو رسوم أخرى)`)) {
+    return;
+  }
+
+  const res = await api(`/api/charges/${chargeId}`, { method: 'DELETE' });
+  if (res && res.success) {
+    showToast('تم حذف الالتزام المالي بنجاح', 'success');
+    if (studentId) {
+      openStudentProfileModal(studentId);
+    } else if (state.currentPage === 'charges') {
+      renderCharges(document.getElementById('app-content'));
+    } else if (state.currentPage === 'students') {
+      renderStudents(document.getElementById('app-content'));
+    }
+  } else {
+    showToast(res ? res.error : 'فشل حذف الالتزام المالي', 'error');
+  }
+}
+
+// ============================================================================
+// MANUAL TRIGGER: GENERATE MONTHLY TUITION (استحقاق الشهر الجديد)
+// ============================================================================
+async function generateMonthlyTuitionNow() {
+  const currentMonthKey = new Date().toISOString().substring(0, 7);
+  if (!confirm(`هل تريد تأكيد وتوليد استحقاق الرسوم الشهرية لكافة الأطفال النشطين لشهر (${currentMonthKey})؟\n\n✓ السيستم يقوم بذلك تلقائياً أول كل شهر.\n✓ لا خوف من التكرار، السيستم يتخطى أي طفل تم تسجيل استحقاقه لهذا الشهر.`)) {
+    return;
+  }
+
+  showToast('جاري فحص وتوليد الرسوم الشهرية...', 'info');
+  const res = await api('/api/charges/generate-monthly', {
+    method: 'POST',
+    body: JSON.stringify({ targetMonth: currentMonthKey })
+  });
+
+  if (res && res.success) {
+    const msg = `تم فحص استحقاق شهر (${res.monthName}):\n• تم توليد رسوم جديدة لعدد: ${res.generatedCount} طفل\n• تم تخطي (مفوترين مسبقاً): ${res.skippedCount} طفل\n• إجمالي الأطفال النشطين: ${res.totalActive}`;
+    alert(msg);
+    showToast(`تم بنجاح توليد رسوم ${res.generatedCount} طفل جديد`, 'success');
+    if (state.currentPage === 'students') {
+      renderStudents(document.getElementById('app-content'));
+    } else if (state.currentPage === 'charges') {
+      renderCharges(document.getElementById('app-content'));
+    } else if (state.currentPage === 'dashboard') {
+      renderDashboard(document.getElementById('app-content'));
+    }
+  } else {
+    showToast(res ? res.error : 'فشل توليد الرسوم الشهرية', 'error');
+  }
+}
+
+// ============================================================================
+// PAGE: CHARGES & FINANCIAL OBLIGATIONS REGISTER (سجل وقائمة الالتزامات المالية)
+// ============================================================================
+async function renderCharges(container) {
+  container.innerHTML = '<div class="p-12 text-center text-slate-400">جاري تحميل قائمة الالتزامات المالية...</div>';
+
+  const res = await api('/api/charges');
+  if (!res || !res.success) {
+    container.innerHTML = '<div class="p-8 text-center text-rose-500">فشل في تحميل الالتزامات المالية</div>';
+    return;
+  }
+
+  const allCharges = res.charges || [];
+
+  function getChargeTypeBadge(type) {
+    const types = {
+      tuition: { label: 'مصروفات شهرية', bg: 'bg-teal-50 text-teal-700 border-teal-200' },
+      bus: { label: 'اشتراك باص', bg: 'bg-amber-50 text-amber-700 border-amber-200' },
+      uniform: { label: 'زي موحد', bg: 'bg-indigo-50 text-indigo-700 border-indigo-200' },
+      books: { label: 'كتب وأدوات', bg: 'bg-purple-50 text-purple-700 border-purple-200' },
+      activities: { label: 'أنشطة ورحلات', bg: 'bg-pink-50 text-pink-700 border-pink-200' },
+      evaluation: { label: 'جلسة تقييم', bg: 'bg-sky-50 text-sky-700 border-sky-200' },
+      registration: { label: 'تسجيل وقبول', bg: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+      custom: { label: 'بند مخصص', bg: 'bg-slate-100 text-slate-700 border-slate-200' }
+    };
+    const t = types[type] || { label: type || 'أخرى', bg: 'bg-slate-100 text-slate-700 border-slate-200' };
+    return `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold border ${t.bg}">${t.label}</span>`;
+  }
+
+  // Summary counts
+  let totalNet = 0;
+  let totalPaid = 0;
+  for (const c of allCharges) {
+    totalNet += Number(c.net_amount || 0);
+    totalPaid += Number(c.paid_amount || 0);
+  }
+  const totalRemaining = Math.max(0, totalNet - totalPaid);
+
+  container.innerHTML = `
+    <!-- Header -->
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div>
+        <h2 class="text-lg font-bold text-slate-900 flex items-center gap-2">
+          <span>📋</span> <span>قائمة الالتزامات والمطالبات المالية</span>
+        </h2>
+        <p class="text-xs text-slate-500">حصر شامل ومتابعة مرنة لكافة الرسوم والاشتراكات مع إمكانية التعديل والإلغاء المباشر</p>
+      </div>
+      <div class="flex items-center gap-2">
+        <button onclick="generateMonthlyTuitionNow()" class="px-3 py-2 rounded-xl border border-amber-200 bg-amber-50 hover:bg-amber-100 text-amber-800 text-xs font-bold transition flex items-center gap-1.5 shadow-xs" title="توليد استحقاق الشهر الجديد لكافة الأطفال النشطين">
+          <span>⚡</span> <span>استحقاق الشهر الجديد</span>
+        </button>
+        <button onclick="openAddChargeModal()" class="btn btn-primary text-xs font-bold flex items-center gap-1.5">
+          <span>+</span> <span>إضافة التزام مالي جديد</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Summary KPI Cards -->
+    <div class="grid grid-cols-1 sm:grid-cols-4 gap-3">
+      <div class="card p-3.5 bg-white border-slate-200">
+        <div class="text-[11px] text-slate-500">إجمالي الالتزامات المطلوبة</div>
+        <div class="text-lg font-black text-slate-800 mt-1">${formatEGP(totalNet)}</div>
+      </div>
+      <div class="card p-3.5 bg-white border-slate-200">
+        <div class="text-[11px] text-slate-500">المحصل فعلياً</div>
+        <div class="text-lg font-black text-emerald-600 mt-1">${formatEGP(totalPaid)}</div>
+      </div>
+      <div class="card p-3.5 bg-white border-slate-200">
+        <div class="text-[11px] text-slate-500">المتبقي قيد التحصيل</div>
+        <div class="text-lg font-black text-rose-600 mt-1">${formatEGP(totalRemaining)}</div>
+      </div>
+      <div class="card p-3.5 bg-white border-slate-200">
+        <div class="text-[11px] text-slate-500">إجمالي عدد البنود</div>
+        <div class="text-lg font-black text-teal-600 mt-1">${allCharges.length} بند</div>
+      </div>
+    </div>
+
+    <!-- Filter Bar -->
+    <div class="card p-4 bg-white flex flex-col md:flex-row items-center gap-3">
+      <div class="relative flex-1 w-full">
+        <input type="text" id="charges-search-input" placeholder="بحث باسم الطفل، الكود، أو بيان الالتزام..."
+               class="w-full pl-4 pr-10 py-2 rounded-xl border border-slate-200 text-xs focus:border-teal-500 outline-none">
+        <span class="absolute right-3.5 top-2.5 text-slate-400">🔍</span>
+      </div>
+
+      <div class="flex items-center gap-2 w-full md:w-auto">
+        <select id="charges-filter-status" class="px-3 py-2 rounded-xl border border-slate-200 text-xs text-slate-700 bg-white outline-none">
+          <option value="">كافة الحالات</option>
+          <option value="unpaid">غير مسدد</option>
+          <option value="partially_paid">مسدد جزئياً</option>
+          <option value="paid">مسدد بالكامل</option>
+        </select>
+
+        <select id="charges-filter-type" class="px-3 py-2 rounded-xl border border-slate-200 text-xs text-slate-700 bg-white outline-none">
+          <option value="">كافة أنواع الرسوم</option>
+          <option value="tuition">مصروفات شهرية</option>
+          <option value="bus">اشتراك باص</option>
+          <option value="uniform">زي مدرسي</option>
+          <option value="books">كتب وأدوات</option>
+          <option value="activities">أنشطة ورحلات</option>
+          <option value="evaluation">جلسات تقييم</option>
+          <option value="registration">رسوم تسجيل</option>
+          <option value="custom">بند مخصص</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Table Container -->
+    <div class="card bg-white overflow-hidden" id="charges-table-container">
+      <!-- Injected by filterCharges() -->
+    </div>
+  `;
+
+  function filterCharges() {
+    const term = (document.getElementById('charges-search-input')?.value || '').toLowerCase().trim();
+    const statusVal = document.getElementById('charges-filter-status')?.value || '';
+    const typeVal = document.getElementById('charges-filter-type')?.value || '';
+
+    const filtered = allCharges.filter(c => {
+      const matchTerm = !term ||
+        (c.student_name && c.student_name.toLowerCase().includes(term)) ||
+        (c.student_code && String(c.student_code).includes(term)) ||
+        (c.description && c.description.toLowerCase().includes(term));
+      const matchStatus = !statusVal || c.status === statusVal;
+      const matchType = !typeVal || c.charge_type === typeVal;
+      return matchTerm && matchStatus && matchType;
+    });
+
+    const tableContainer = document.getElementById('charges-table-container');
+    if (!tableContainer) return;
+
+    if (filtered.length === 0) {
+      tableContainer.innerHTML = '<div class="p-12 text-center text-slate-400 text-xs">لا توجد التزامات مالية مطابقة لخيارات البحث المحددة</div>';
+      return;
+    }
+
+    tableContainer.innerHTML = `
+      <div class="overflow-x-auto">
+        <table class="w-full text-right text-xs">
+          <thead class="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold">
+            <tr>
+              <th class="p-3.5">الكود</th>
+              <th class="p-3.5">اسم الطفل</th>
+              <th class="p-3.5">القاعة</th>
+              <th class="p-3.5">النوع</th>
+              <th class="p-3.5">البيان</th>
+              <th class="p-3.5">المبلغ الأصلي</th>
+              <th class="p-3.5">الخصم</th>
+              <th class="p-3.5">الصافي المستحق</th>
+              <th class="p-3.5">المسدد</th>
+              <th class="p-3.5">تاريخ الاستحقاق</th>
+              <th class="p-3.5">الحالة</th>
+              <th class="p-3.5 text-center">إجراءات</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-100">
+            ${filtered.map(c => `
+              <tr class="hover:bg-slate-50/80 transition">
+                <td class="p-3.5 font-mono font-bold text-teal-700">#${c.student_code}</td>
+                <td class="p-3.5 font-bold text-slate-800">
+                  <button onclick="openStudentProfileModal(${c.student_id})" class="hover:text-teal-600 hover:underline text-right font-bold">
+                    ${c.student_name}
+                  </button>
+                </td>
+                <td class="p-3.5 text-slate-600">${c.classroom_name || '-'}</td>
+                <td class="p-3.5">${getChargeTypeBadge(c.charge_type)}</td>
+                <td class="p-3.5 font-medium text-slate-800">
+                  <div>${c.description}</div>
+                  ${c.billing_month ? `<span class="text-[10px] text-slate-400 font-mono">شهر: ${c.billing_month}</span>` : ''}
+                </td>
+                <td class="p-3.5 text-slate-600">${formatEGP(c.amount)}</td>
+                <td class="p-3.5 text-slate-400">${c.discount > 0 ? formatEGP(c.discount) : '-'}</td>
+                <td class="p-3.5 font-bold text-slate-900">${formatEGP(c.net_amount)}</td>
+                <td class="p-3.5 text-emerald-600 font-semibold">${formatEGP(c.paid_amount)}</td>
+                <td class="p-3.5 text-slate-500">${c.due_date}</td>
+                <td class="p-3.5">${getStatusBadge(c.status)}</td>
+                <td class="p-3.5 text-center">
+                  <div class="flex items-center justify-center gap-1">
+                    <button onclick="openEditChargeModal(${c.id}, ${c.student_id})" title="تعديل هذا الرسم المالي" class="p-1.5 rounded-lg bg-sky-50 text-sky-700 hover:bg-sky-100 transition font-bold">
+                      ✏️
+                    </button>
+                    <button onclick="openAddPaymentModalForStudent(${c.student_id})" title="تسجيل دفعة سداد" class="p-1.5 rounded-lg bg-emerald-50 text-emerald-600 hover:bg-emerald-100 transition">
+                      💵
+                    </button>
+                    ${Number(c.paid_amount) === 0 ? `
+                      <button onclick="confirmDeleteCharge(${c.id}, ${c.student_id}, '${escapeJsString(c.description)}')" title="حذف هذا الرسم" class="p-1.5 rounded-lg bg-rose-50 text-rose-600 hover:bg-rose-100 transition">
+                        🗑️
+                      </button>
+                    ` : ''}
+                  </div>
+                </td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+    `;
+  }
+
+  document.getElementById('charges-search-input')?.addEventListener('input', filterCharges);
+  document.getElementById('charges-filter-status')?.addEventListener('change', filterCharges);
+  document.getElementById('charges-filter-type')?.addEventListener('change', filterCharges);
+
+  filterCharges();
 }
 
 // ========================================================

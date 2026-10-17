@@ -3,3 +3,4 @@ cloudflared.exe
 Setup.exe
 *.log
 scratch/
+data/*backup*

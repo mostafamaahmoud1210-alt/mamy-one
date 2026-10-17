@@ -705,6 +705,26 @@ async function handleApi(req, res, pathname, query, body) {
       studentId
     );
 
+    // Update primary guardian if provided
+    const { guardian_name, guardian_mobile, guardian_relationship } = body || {};
+    if (guardian_name || guardian_mobile) {
+      const primaryG = db.prepare('SELECT id FROM guardians WHERE student_id = ? AND is_primary = 1').get(studentId);
+      if (primaryG) {
+        db.prepare(`
+          UPDATE guardians SET
+            full_name = COALESCE(?, full_name),
+            mobile = COALESCE(?, mobile),
+            relationship = COALESCE(?, relationship)
+          WHERE id = ?
+        `).run(guardian_name || null, guardian_mobile || null, guardian_relationship || null, primaryG.id);
+      } else if (guardian_name && guardian_mobile) {
+        db.prepare(`
+          INSERT INTO guardians (student_id, full_name, relationship, is_primary, mobile, created_at)
+          VALUES (?, ?, ?, 1, ?, ?)
+        `).run(studentId, guardian_name, guardian_relationship || 'ولي أمر', guardian_mobile, now);
+      }
+    }
+
     logAudit({
       user,
       action: 'STUDENT_UPDATE',
@@ -838,6 +858,209 @@ async function handleApi(req, res, pathname, query, body) {
     });
 
     return sendJson(res, 201, { success: true, message: 'تمت إضافة ولي الأمر بنجاح' });
+  }
+
+  // -------------------------------------------------------------------------
+  // 3.1. STUDENT CHARGES & FINANCIAL OBLIGATIONS (إدارة المطالبات والالتزامات المالية)
+  // -------------------------------------------------------------------------
+
+  // Add custom fee / charge to student (باص، زي، كتب، نشاط، تقييم، أو رسوم مخصصة)
+  const studentChargeAddMatch = pathname.match(/^\/api\/students\/(\d+)\/charges$/);
+  if (studentChargeAddMatch && method === 'POST') {
+    if (!hasPermission(user, 'payments_edit') && !hasPermission(user, 'admin')) {
+      return sendError(res, 403, 'ليس لديك صلاحية إضافة التزامات مالية');
+    }
+
+    const studentId = Number(studentChargeAddMatch[1]);
+    const student = db.prepare('SELECT id, code, full_name FROM students WHERE id = ?').get(studentId);
+    if (!student) return sendError(res, 404, 'الطفل غير موجود');
+
+    const {
+      charge_type = 'other',
+      description,
+      amount,
+      discount = 0,
+      due_date,
+      billing_month
+    } = body || {};
+
+    const rawAmt = Number(amount);
+    if (!description || isNaN(rawAmt) || rawAmt <= 0) {
+      return sendError(res, 400, 'يرجى إدخال بيان الرسم والمبلغ بشكل صحيح');
+    }
+
+    const disc = Math.max(0, Number(discount) || 0);
+    const netAmt = Math.max(0, rawAmt - disc);
+    const now = getCairoNow();
+    const today = getCairoDate();
+    const currentMonth = today.substring(0, 7);
+    const finalDueDate = due_date || today;
+    const finalBillingMonth = billing_month || currentMonth;
+
+    const resInsert = db.prepare(`
+      INSERT INTO student_charges (
+        student_id, charge_type, description, amount, discount, net_amount,
+        charge_date, due_date, billing_month, status, paid_amount,
+        created_by_user_id, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'unpaid', 0, ?, ?, ?)
+    `).run(
+      studentId,
+      charge_type,
+      description,
+      rawAmt,
+      disc,
+      netAmt,
+      today,
+      finalDueDate,
+      finalBillingMonth,
+      user.id,
+      now,
+      now
+    );
+
+    logAudit({
+      user,
+      action: 'CHARGE_CREATE',
+      entityType: 'charge',
+      entityId: resInsert.lastInsertRowid,
+      details: { studentId, studentCode: student.code, description, amount: rawAmt, netAmt }
+    });
+
+    return sendJson(res, 201, {
+      success: true,
+      message: `تمت إضافة الالتزام المالي (${description}) للطفل ${student.full_name} بنجاح`,
+      chargeId: Number(resInsert.lastInsertRowid)
+    });
+  }
+
+  // Update a student charge
+  const chargeSingleMatch = pathname.match(/^\/api\/charges\/(\d+)$/);
+  if (chargeSingleMatch && method === 'PUT') {
+    if (!hasPermission(user, 'payments_edit') && !hasPermission(user, 'admin')) {
+      return sendError(res, 403, 'غير مصرح');
+    }
+
+    const chargeId = Number(chargeSingleMatch[1]);
+    const charge = db.prepare('SELECT * FROM student_charges WHERE id = ?').get(chargeId);
+    if (!charge) return sendError(res, 404, 'الالتزام المالي غير موجود');
+
+    const { description, amount, discount, due_date, charge_type } = body || {};
+    const newAmount = amount !== undefined ? Number(amount) : Number(charge.amount);
+    const newDiscount = discount !== undefined ? Number(discount) : Number(charge.discount);
+    const newNet = Math.max(0, newAmount - newDiscount);
+
+    if (newNet < Number(charge.paid_amount)) {
+      return sendError(res, 400, `لا يمكن تعديل المبلغ لأقل من المبلغ المسدد مسبقاً (${charge.paid_amount} ج.م)`);
+    }
+
+    const newStatus = Number(charge.paid_amount) >= newNet ? 'paid' : (Number(charge.paid_amount) > 0 ? 'partially_paid' : 'unpaid');
+    const now = getCairoNow();
+
+    db.prepare(`
+      UPDATE student_charges SET
+        description = COALESCE(?, description),
+        charge_type = COALESCE(?, charge_type),
+        amount = ?,
+        discount = ?,
+        net_amount = ?,
+        due_date = COALESCE(?, due_date),
+        status = ?,
+        updated_at = ?
+      WHERE id = ?
+    `).run(
+      description,
+      charge_type,
+      newAmount,
+      newDiscount,
+      newNet,
+      due_date,
+      newStatus,
+      now,
+      chargeId
+    );
+
+    logAudit({
+      user,
+      action: 'CHARGE_UPDATE',
+      entityType: 'charge',
+      entityId: chargeId,
+      details: { newAmount, newNet, description }
+    });
+
+    return sendJson(res, 200, { success: true, message: 'تم تعديل الالتزام المالي بنجاح' });
+  }
+
+  // Delete a student charge (only if unpaid)
+  if (chargeSingleMatch && method === 'DELETE') {
+    if (!hasPermission(user, 'payments_edit') && !hasPermission(user, 'admin')) {
+      return sendError(res, 403, 'غير مصرح');
+    }
+
+    const chargeId = Number(chargeSingleMatch[1]);
+    const charge = db.prepare('SELECT * FROM student_charges WHERE id = ?').get(chargeId);
+    if (!charge) return sendError(res, 404, 'الالتزام المالي غير موجود');
+
+    if (Number(charge.paid_amount) > 0) {
+      return sendError(res, 400, 'لا يمكن حذف رسم تم سداد جزء منه أو بالكامل، يرجى استرداد الدفعة أولاً');
+    }
+
+    db.prepare('DELETE FROM student_charges WHERE id = ?').run(chargeId);
+
+    logAudit({
+      user,
+      action: 'CHARGE_DELETE',
+      entityType: 'charge',
+      entityId: chargeId,
+      details: { description: charge.description, amount: charge.amount }
+    });
+
+    return sendJson(res, 200, { success: true, message: 'تم حذف الالتزام المالي بنجاح' });
+  }
+
+  // Generate monthly tuition charges for all active students (manual trigger or scheduled)
+  if (pathname === '/api/charges/generate-monthly' && method === 'POST') {
+    if (!hasPermission(user, 'admin') && !hasPermission(user, 'payments_edit')) {
+      return sendError(res, 403, 'غير مصرح');
+    }
+
+    const { targetMonth } = body || {};
+    const { generateMonthlyTuitionCharges } = require('./scheduler');
+    const result = generateMonthlyTuitionCharges(targetMonth);
+    return sendJson(res, 200, { success: true, ...result });
+  }
+
+  // Global list of charges (قائمة الالتزامات والمطالبات المالية)
+  if (pathname === '/api/charges' && method === 'GET') {
+    const { student_id, status, billing_month, charge_type } = query;
+    let sql = `
+      SELECT sc.*, s.full_name as student_name, s.code as student_code, c.name as classroom_name
+      FROM student_charges sc
+      JOIN students s ON sc.student_id = s.id
+      LEFT JOIN classrooms c ON s.classroom_id = c.id
+      WHERE 1=1
+    `;
+    const params = [];
+
+    if (student_id) {
+      sql += ' AND sc.student_id = ?';
+      params.push(Number(student_id));
+    }
+    if (status) {
+      sql += ' AND sc.status = ?';
+      params.push(status);
+    }
+    if (billing_month) {
+      sql += ' AND sc.billing_month = ?';
+      params.push(billing_month);
+    }
+    if (charge_type) {
+      sql += ' AND sc.charge_type = ?';
+      params.push(charge_type);
+    }
+
+    sql += ' ORDER BY sc.due_date DESC, sc.id DESC';
+    const charges = db.prepare(sql).all(...params);
+    return sendJson(res, 200, { success: true, charges, count: charges.length });
   }
 
   // -------------------------------------------------------------------------
