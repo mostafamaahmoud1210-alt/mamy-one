@@ -622,11 +622,16 @@ async function renderDashboard(container) {
       ${state.user?.role !== 'teacher' ? `
       <!-- Financial Statistics (2 columns span) -->
       <div class="card p-5 bg-white lg:col-span-2">
-        <div class="flex items-center justify-between mb-4">
+        <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
           <h4 class="font-bold text-sm text-slate-800 flex items-center gap-2">
             <span>💰</span> <span>المؤشرات المالية لشهر (${new Date().toLocaleDateString('ar-EG', { month: 'long', year: 'numeric' })})</span>
           </h4>
-          <span class="badge badge-primary font-bold">نسبة التحصيل: ${s.finances.collectionPercentage}%</span>
+          <div class="flex items-center gap-2">
+            <button onclick="triggerRestoreOctoberBalances()" class="px-2.5 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 text-[11px] font-bold flex items-center gap-1 shadow-xs transition" title="فحص تلقائي وحذف أي رسوم مكررة أو ناتجة عن التوليد الآلي واستعادة الحسابات الأصلية">
+              <span>🧹</span> <span>استعادة حسابات أكتوبر</span>
+            </button>
+            <span class="badge badge-primary font-bold">نسبة التحصيل: ${s.finances.collectionPercentage}%</span>
+          </div>
         </div>
 
         <div class="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-4">
@@ -2149,6 +2154,29 @@ async function confirmDeleteCharge(chargeId, studentId, description) {
   }
 }
 
+// ============================================================================
+// RESTORE OCTOBER BALANCES & CLEANUP EXTRA CHARGES
+// ============================================================================
+async function triggerRestoreOctoberBalances() {
+  if (!confirm('هل تريد فحص وإزالة أي رسوم شهرية مكررة نزلت بالخطأ لشهر أكتوبر 2026 واستعادة أرصدة وحسابات الأطفال الأصلية كما سجلتها بالضبط؟')) {
+    return;
+  }
+  const res = await api('/api/charges/cleanup-auto', { method: 'POST' });
+  if (res && res.success) {
+    showToast(res.message || 'تم تنظيف الرسوم واستعادة حسابات شهر أكتوبر بنجاح! ✓', 'success');
+    if (state.currentPage === 'charges') {
+      renderCharges(document.getElementById('app-content'));
+    } else if (state.currentPage === 'dashboard') {
+      renderDashboard(document.getElementById('app-content'));
+    } else if (state.currentPage === 'students') {
+      renderStudents(document.getElementById('app-content'));
+    }
+    loadNotifications();
+  } else {
+    showToast(res ? res.error : 'فشل تنفيذ عملية الاستعادة', 'error');
+  }
+}
+
 
 // ============================================================================
 // PAGE: CHARGES & FINANCIAL OBLIGATIONS REGISTER (سجل وقائمة الالتزامات المالية)
@@ -2198,6 +2226,9 @@ async function renderCharges(container) {
         <p class="text-xs text-slate-500">حصر شامل ومتابعة مرنة لكافة الرسوم والاشتراكات مع إمكانية التعديل والإلغاء المباشر</p>
       </div>
       <div class="flex items-center gap-2">
+        <button onclick="triggerRestoreOctoberBalances()" class="px-3 py-2 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 text-xs font-bold flex items-center gap-1.5 shadow-xs transition" title="فحص وإلغاء أي رسوم مكررة واستعادة حسابات شهر أكتوبر الأصلية">
+          <span>🧹</span> <span>استعادة حسابات أكتوبر وإزالة الرسوم الزائدة</span>
+        </button>
         <button onclick="openAddChargeModal()" class="btn btn-primary text-xs font-bold flex items-center gap-1.5">
           <span>+</span> <span>إضافة التزام مالي جديد</span>
         </button>
