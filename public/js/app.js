@@ -28,7 +28,19 @@ async function api(endpoint, options = {}) {
       ...options,
       headers
     });
-    const data = await res.json();
+    const text = await res.text();
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch (parseErr) {
+      if (res.status === 404 || text.includes('Not Found')) {
+        showToast('⚠️ السيرفر السحابي متوقف حالياً، يرجى تشغيله من لوحة Bonto (Start / Restart)', 'error');
+      } else {
+        showToast(`تعذر الاتصال بالخادم (${res.status}): يرجى التأكد من تشغيل السيرفر`, 'error');
+      }
+      return null;
+    }
+
     if (res.status === 401 && !endpoint.includes('/api/auth/login')) {
       logout();
       showToast('انتهت صلاحية الجلسة، يرجى تسجيل الدخول مجدداً', 'warning');
@@ -37,7 +49,7 @@ async function api(endpoint, options = {}) {
     return data;
   } catch (err) {
     console.error('API Error:', err);
-    showToast('تعذر الاتصال بالخادم: ' + err.message, 'error');
+    showToast('تعذر الاتصال بالخادم: تأكد من تشغيل السيرفر أو اتصال الإنترنت', 'error');
     return null;
   }
 }
