@@ -794,9 +794,6 @@ async function renderStudents(container) {
         <p class="text-xs text-slate-500">إجمالي الأطفال المسجلين: <strong class="text-teal-600">${students.length}</strong> طفل</p>
       </div>
       <div class="flex items-center gap-2">
-        <button onclick="generateMonthlyTuitionNow()" class="px-3 py-2 rounded-xl border border-amber-200 bg-amber-50 hover:bg-amber-100 text-amber-800 text-xs font-bold transition flex items-center gap-1.5 shadow-xs" title="توليد وتأكيد استحقاق الرسوم الشهرية للشهر الحالي لكافة الأطفال النشطين">
-          <span>⚡</span> <span>استحقاق الشهر الجديد</span>
-        </button>
         <button id="btn-card-designer-page" class="px-3 py-2 rounded-xl border border-teal-200 bg-teal-50 hover:bg-teal-100 text-teal-800 text-xs font-bold transition flex items-center gap-1.5 shadow-xs">
           <span>🪪</span> <span>مصمم كارنيهات الأطفال</span>
         </button>
@@ -2152,36 +2149,6 @@ async function confirmDeleteCharge(chargeId, studentId, description) {
   }
 }
 
-// ============================================================================
-// MANUAL TRIGGER: GENERATE MONTHLY TUITION (استحقاق الشهر الجديد)
-// ============================================================================
-async function generateMonthlyTuitionNow() {
-  const currentMonthKey = new Date().toISOString().substring(0, 7);
-  if (!confirm(`هل تريد تأكيد وتوليد استحقاق الرسوم الشهرية لكافة الأطفال النشطين لشهر (${currentMonthKey})؟\n\n✓ السيستم يقوم بذلك تلقائياً أول كل شهر.\n✓ لا خوف من التكرار، السيستم يتخطى أي طفل تم تسجيل استحقاقه لهذا الشهر.`)) {
-    return;
-  }
-
-  showToast('جاري فحص وتوليد الرسوم الشهرية...', 'info');
-  const res = await api('/api/charges/generate-monthly', {
-    method: 'POST',
-    body: JSON.stringify({ targetMonth: currentMonthKey })
-  });
-
-  if (res && res.success) {
-    const msg = `تم فحص استحقاق شهر (${res.monthName}):\n• تم توليد رسوم جديدة لعدد: ${res.generatedCount} طفل\n• تم تخطي (مفوترين مسبقاً): ${res.skippedCount} طفل\n• إجمالي الأطفال النشطين: ${res.totalActive}`;
-    alert(msg);
-    showToast(`تم بنجاح توليد رسوم ${res.generatedCount} طفل جديد`, 'success');
-    if (state.currentPage === 'students') {
-      renderStudents(document.getElementById('app-content'));
-    } else if (state.currentPage === 'charges') {
-      renderCharges(document.getElementById('app-content'));
-    } else if (state.currentPage === 'dashboard') {
-      renderDashboard(document.getElementById('app-content'));
-    }
-  } else {
-    showToast(res ? res.error : 'فشل توليد الرسوم الشهرية', 'error');
-  }
-}
 
 // ============================================================================
 // PAGE: CHARGES & FINANCIAL OBLIGATIONS REGISTER (سجل وقائمة الالتزامات المالية)
@@ -2231,9 +2198,6 @@ async function renderCharges(container) {
         <p class="text-xs text-slate-500">حصر شامل ومتابعة مرنة لكافة الرسوم والاشتراكات مع إمكانية التعديل والإلغاء المباشر</p>
       </div>
       <div class="flex items-center gap-2">
-        <button onclick="generateMonthlyTuitionNow()" class="px-3 py-2 rounded-xl border border-amber-200 bg-amber-50 hover:bg-amber-100 text-amber-800 text-xs font-bold transition flex items-center gap-1.5 shadow-xs" title="توليد استحقاق الشهر الجديد لكافة الأطفال النشطين">
-          <span>⚡</span> <span>استحقاق الشهر الجديد</span>
-        </button>
         <button onclick="openAddChargeModal()" class="btn btn-primary text-xs font-bold flex items-center gap-1.5">
           <span>+</span> <span>إضافة التزام مالي جديد</span>
         </button>
