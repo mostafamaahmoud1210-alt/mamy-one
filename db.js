@@ -812,83 +812,9 @@ function initSQLiteSchema() {
 /**
  * Atomic Student Code Generator:
  * Generates sequential codes starting at 1001.
- * When a child is deleted or a code is freed, the lowest free code (>= 1001) is reused automatically.
+ * Automatically reuses freed lower numbers.
  */
-function getNextStudentCode() {
-  const taken = new Set(sqliteDb.prepare('SELECT code FROM students WHERE code >= 1001').all().map(r => Number(r.code)));
-  let seqRow = sqliteDb.prepare('SELECT next_code FROM student_code_sequence WHERE id = 1').get();
-  let code = seqRow ? Number(seqRow.next_code) : 1001;
-
-  // If code is already taken in students table, advance until free
-  while (taken.has(code)) {
-    code++;
-  }
-
-  // Advance sequence for next call
-  let nextCandidate = code + 1;
-  while (taken.has(nextCandidate)) {
-    nextCandidate++;
-  }
-
-  if (!seqRow) {
-    sqliteDb.prepare('INSERT INTO student_code_sequence (id, next_code) VALUES (1, ?)').run(nextCandidate);
-  } else {
-    sqliteDb.prepare('UPDATE student_code_sequence SET next_code = ? WHERE id = 1').run(nextCandidate);
-  }
-
-  return code;
-}
-
-/**
- * Generate Next Receipt Number (e.g., REC-2026-1001)
- */
-function getNextReceiptNumber() {
-  const currentYear = new Date().getFullYear();
-  const prefix = `REC-${currentYear}-`;
-  const row = sqliteDb.prepare(`SELECT receipt_no FROM payments WHERE receipt_no LIKE ? ORDER BY id DESC LIMIT 1`).get(`${prefix}%`);
-  let seq = 1001;
-  if (row && row.receipt_no) {
-    const parts = row.receipt_no.split('-');
-    const lastNum = parseInt(parts[2], 10);
-    if (!isNaN(lastNum)) seq = lastNum + 1;
-  }
-  return `${prefix}${seq}`;
-}
-
-/**
- * Generate Next Expense Reference Number (e.g., EXP-2026-0001)
- */
-function getNextExpenseReference() {
-  const currentYear = new Date().getFullYear();
-  const prefix = `EXP-${currentYear}-`;
-  const row = sqliteDb.prepare(`SELECT reference_no FROM expenses WHERE reference_no LIKE ? ORDER BY id DESC LIMIT 1`).get(`${prefix}%`);
-  let seq = 1;
-  if (row && row.reference_no) {
-    const parts = row.reference_no.split('-');
-    const lastNum = parseInt(parts[2], 10);
-    if (!isNaN(lastNum)) seq = lastNum + 1;
-  }
-  return `${prefix}${String(seq).padStart(4, '0')}`;
-}
-
-/**
- * Generate Next Employee Code (e.g., EMP-101)
- */
-function getNextEmployeeCode() {
-  const row = sqliteDb.prepare(`SELECT code FROM employees ORDER BY id DESC LIMIT 1`).get();
-  let seq = 101;
-  if (row && row.code) {
-    const parts = row.code.split('-');
-    const lastNum = parseInt(parts[1], 10);
-    if (!isNaN(lastNum)) seq = lastNum + 1;
-  }
-  return `EMP-${seq}`;
-}
-
-
-
-/**
- * async function getNextStudentCode() {
+async function getNextStudentCode() {
   const rows = await db.prepare('SELECT code FROM students WHERE code >= 1001').all();
   const taken = new Set((rows || []).map(r => Number(r.code)));
   let seqRow = await db.prepare('SELECT next_code FROM student_code_sequence WHERE id = 1').get();
