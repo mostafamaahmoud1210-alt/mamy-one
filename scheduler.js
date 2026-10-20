@@ -99,8 +99,8 @@ async function runScheduledTasks() {
       JOIN student_charges c ON s.id = c.student_id
       WHERE s.status = 'active'
         AND c.status IN ('unpaid', 'partially_paid')
-        AND date(c.due_date) < date(?)
-      GROUP BY s.id
+        AND c.due_date < ?
+      GROUP BY s.id, s.code, s.full_name, s.payment_due_day
       HAVING COALESCE(SUM(c.net_amount - c.paid_amount), 0) > 0
     `).all(today);
 
@@ -109,8 +109,8 @@ async function runScheduledTasks() {
       // Check if notification already logged today
       const existing = await db.prepare(`
         SELECT id FROM notifications
-        WHERE type = 'overdue_fee' AND link = ? AND date(created_at) = date(?)
-      `).get(`/students/${st.id}`, today);
+        WHERE type = 'overdue_fee' AND link = ? AND created_at LIKE ?
+      `).get(`/students/${st.id}`, `${today}%`);
 
       if (!existing) {
         await db.prepare(`
@@ -136,16 +136,16 @@ async function runScheduledTasks() {
       JOIN students s ON c.student_id = s.id
       WHERE s.status = 'active'
         AND c.status IN ('unpaid', 'partially_paid')
-        AND date(c.due_date) >= date(?)
-        AND date(c.due_date) <= date(?)
+        AND c.due_date >= ?
+        AND c.due_date <= ?
     `).all(today, threeDaysStr);
 
     for (const ch of upcomingCharges) {
       upcomingCount++;
       const existing = await db.prepare(`
         SELECT id FROM notifications
-        WHERE type = 'upcoming_due' AND link = ? AND date(created_at) = date(?)
-      `).get(`/students/${ch.id}`, today);
+        WHERE type = 'upcoming_due' AND link = ? AND created_at LIKE ?
+      `).get(`/students/${ch.id}`, `${today}%`);
 
       if (!existing) {
         await db.prepare(`
@@ -172,8 +172,8 @@ async function runScheduledTasks() {
       unpaidSalariesCount++;
       const existing = await db.prepare(`
         SELECT id FROM notifications
-        WHERE type = 'unpaid_salary' AND message LIKE ? AND date(created_at) = date(?)
-      `).get(`%${pay.full_name}%`, today);
+        WHERE type = 'unpaid_salary' AND message LIKE ? AND created_at LIKE ?
+      `).get(`%${pay.full_name}%`, `${today}%`);
 
       if (!existing) {
         await db.prepare(`

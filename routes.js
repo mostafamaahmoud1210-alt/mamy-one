@@ -223,82 +223,83 @@ async function handleApi(req, res, pathname, query, body) {
 
     const today = getCairoDate();
     const currentMonthKey = today.substring(0, 7); // 'YYYY-MM'
+    const getNum = (row, col) => (row && row[col] !== undefined && row[col] !== null ? Number(row[col]) : 0);
 
     // Student counts
-    const totalStudents = await db.prepare('SELECT COUNT(*) as c FROM students').get().c;
-    const activeStudents = await db.prepare("SELECT COUNT(*) as c FROM students WHERE status = 'active'").get().c;
-    const withdrawnStudents = await db.prepare("SELECT COUNT(*) as c FROM students WHERE status = 'withdrawn'").get().c;
-    const suspendedStudents = await db.prepare("SELECT COUNT(*) as c FROM students WHERE status = 'suspended'").get().c;
+    const totalStudents = getNum(await db.prepare('SELECT COUNT(*) as c FROM students').get(), 'c');
+    const activeStudents = getNum(await db.prepare("SELECT COUNT(*) as c FROM students WHERE status = 'active'").get(), 'c');
+    const withdrawnStudents = getNum(await db.prepare("SELECT COUNT(*) as c FROM students WHERE status = 'withdrawn'").get(), 'c');
+    const suspendedStudents = getNum(await db.prepare("SELECT COUNT(*) as c FROM students WHERE status = 'suspended'").get(), 'c');
 
     // Categories breakdown
-    const regularCount = await db.prepare("SELECT COUNT(*) as c FROM students WHERE status = 'active' AND classification = 'regular'").get().c;
-    const learningDiffCount = await db.prepare("SELECT COUNT(*) as c FROM students WHERE status = 'active' AND classification = 'learning_difficulties'").get().c;
-    const speechTherapyCount = await db.prepare("SELECT COUNT(*) as c FROM students WHERE status = 'active' AND classification = 'speech_therapy'").get().c;
+    const regularCount = getNum(await db.prepare("SELECT COUNT(*) as c FROM students WHERE status = 'active' AND classification = 'regular'").get(), 'c');
+    const learningDiffCount = getNum(await db.prepare("SELECT COUNT(*) as c FROM students WHERE status = 'active' AND classification = 'learning_difficulties'").get(), 'c');
+    const speechTherapyCount = getNum(await db.prepare("SELECT COUNT(*) as c FROM students WHERE status = 'active' AND classification = 'speech_therapy'").get(), 'c');
 
     // Today's attendance
-    const attPresent = await db.prepare("SELECT COUNT(*) as c FROM attendance WHERE date = ? AND status = 'present'").get(today).c;
-    const attAbsent = await db.prepare("SELECT COUNT(*) as c FROM attendance WHERE date = ? AND status = 'absent'").get(today).c;
-    const attLate = await db.prepare("SELECT COUNT(*) as c FROM attendance WHERE date = ? AND status = 'late'").get(today).c;
-    const attExcused = await db.prepare("SELECT COUNT(*) as c FROM attendance WHERE date = ? AND status = 'excused'").get(today).c;
+    const attPresent = getNum(await db.prepare("SELECT COUNT(*) as c FROM attendance WHERE date = ? AND status = 'present'").get(today), 'c');
+    const attAbsent = getNum(await db.prepare("SELECT COUNT(*) as c FROM attendance WHERE date = ? AND status = 'absent'").get(today), 'c');
+    const attLate = getNum(await db.prepare("SELECT COUNT(*) as c FROM attendance WHERE date = ? AND status = 'late'").get(today), 'c');
+    const attExcused = getNum(await db.prepare("SELECT COUNT(*) as c FROM attendance WHERE date = ? AND status = 'excused'").get(today), 'c');
 
     // Newly registered this month
-    const newRegisteredThisMonth = await db.prepare(`
+    const newRegisteredThisMonth = getNum(await db.prepare(`
       SELECT COUNT(*) as c FROM students
       WHERE enrollment_date >= ?
-    `).get(`${currentMonthKey}-01`).c;
+    `).get(`${currentMonthKey}-01`), 'c');
 
     // Financial stats (Month to date)
     // 1. Total payments collected this month
-    const monthPayments = await db.prepare(`
+    const monthPayments = getNum(await db.prepare(`
       SELECT COALESCE(SUM(amount), 0) as total
       FROM payments
       WHERE status = 'completed' AND payment_date LIKE ?
-    `).get(`${currentMonthKey}%`).total;
+    `).get(`${currentMonthKey}%`), 'total');
 
     // Additional payments specifically
-    const monthAdditionalPayments = await db.prepare(`
+    const monthAdditionalPayments = getNum(await db.prepare(`
       SELECT COALESCE(SUM(amount), 0) as total
       FROM payments
       WHERE status = 'completed' AND payment_category != 'tuition' AND payment_date LIKE ?
-    `).get(`${currentMonthKey}%`).total;
+    `).get(`${currentMonthKey}%`), 'total');
 
     // 2. Total charges expected this month
-    const monthExpectedCharges = await db.prepare(`
+    const monthExpectedCharges = getNum(await db.prepare(`
       SELECT COALESCE(SUM(net_amount), 0) as total
       FROM student_charges
       WHERE charge_date LIKE ? OR billing_month = ?
-    `).get(`${currentMonthKey}%`, currentMonthKey).total;
+    `).get(`${currentMonthKey}%`, currentMonthKey), 'total');
 
     // 3. Outstanding fees (all unpaid student charges)
-    const totalOutstandingFees = await db.prepare(`
+    const totalOutstandingFees = getNum(await db.prepare(`
       SELECT COALESCE(SUM(net_amount - paid_amount), 0) as total
       FROM student_charges
       WHERE status IN ('unpaid', 'partially_paid')
-    `).get().total;
+    `).get(), 'total');
 
     // Overdue balance (due date < today)
-    const overdueBalance = await db.prepare(`
+    const overdueBalance = getNum(await db.prepare(`
       SELECT COALESCE(SUM(net_amount - paid_amount), 0) as total
       FROM student_charges
-      WHERE status IN ('unpaid', 'partially_paid') AND date(due_date) < date(?)
-    `).get(today).total;
+      WHERE status IN ('unpaid', 'partially_paid') AND due_date < ?
+    `).get(today), 'total');
 
     // 4. Expenses paid this month (Cash Outflow)
-    const monthExpensesPaid = await db.prepare(`
+    const monthExpensesPaid = getNum(await db.prepare(`
       SELECT COALESCE(SUM(paid_amount), 0) as total
       FROM expenses
       WHERE (payment_status = 'paid' OR paid_amount > 0) AND expense_date LIKE ?
-    `).get(`${currentMonthKey}%`).total;
+    `).get(`${currentMonthKey}%`), 'total');
 
     // Net Cash Flow this month
     const netCashFlow = monthPayments - monthExpensesPaid;
 
     // 5. Outstanding salary obligations
-    const unpaidSalaryObligations = await db.prepare(`
+    const unpaidSalaryObligations = getNum(await db.prepare(`
       SELECT COALESCE(SUM(net_salary - paid_amount), 0) as total
       FROM payroll_records
       WHERE status IN ('unpaid', 'partially_paid')
-    `).get().total;
+    `).get(), 'total');
 
     // Collection Percentage
     const collectionPercentage = monthExpectedCharges > 0
@@ -306,39 +307,39 @@ async function handleApi(req, res, pathname, query, body) {
       : 100;
 
     // Overdue students list (top 5)
-    const overdueStudentsList = await db.prepare(`
+    const overdueStudentsList = (await db.prepare(`
       SELECT s.id, s.code, s.full_name,
              COALESCE(SUM(c.net_amount - c.paid_amount), 0) as overdue_amount,
              MAX(c.due_date) as latest_due_date,
-             g.mobile as parent_mobile, g.full_name as parent_name
+             MAX(g.mobile) as parent_mobile, MAX(g.full_name) as parent_name
       FROM students s
       JOIN student_charges c ON s.id = c.student_id
       LEFT JOIN guardians g ON s.id = g.student_id AND g.is_primary = 1
       WHERE s.status = 'active'
         AND c.status IN ('unpaid', 'partially_paid')
-        AND date(c.due_date) < date(?)
-      GROUP BY s.id
+        AND c.due_date < ?
+      GROUP BY s.id, s.code, s.full_name
       ORDER BY overdue_amount DESC
       LIMIT 5
-    `).all(today);
+    `).all(today)) || [];
 
     // Recent transactions (last 5)
-    const recentPayments = await db.prepare(`
+    const recentPayments = (await db.prepare(`
       SELECT p.id, p.receipt_no, p.amount, p.payment_date, p.payment_time, p.payment_method,
              s.code as student_code, s.full_name as student_name
       FROM payments p
       JOIN students s ON p.student_id = s.id
       ORDER BY p.id DESC
       LIMIT 5
-    `).all();
+    `).all()) || [];
 
     // Recent activity audit logs (last 5)
-    const recentActivities = await db.prepare(`
+    const recentActivities = (await db.prepare(`
       SELECT id, user_name, action, entity_type, entity_id, details, created_at
       FROM audit_logs
       ORDER BY id DESC
       LIMIT 6
-    `).all();
+    `).all()) || [];
 
     return sendJson(res, 200, {
       success: true,
@@ -1198,11 +1199,11 @@ async function handleApi(req, res, pathname, query, body) {
       params.push(Number(student_id));
     }
     if (start_date) {
-      sql += ' AND date(p.payment_date) >= date(?)';
+      sql += ' AND p.payment_date >= ?';
       params.push(start_date);
     }
     if (end_date) {
-      sql += ' AND date(p.payment_date) <= date(?)';
+      sql += ' AND p.payment_date <= ?';
       params.push(end_date);
     }
     if (pMethod) {
@@ -1280,7 +1281,7 @@ async function handleApi(req, res, pathname, query, body) {
         targetCharges = await db.prepare(`
           SELECT * FROM student_charges
           WHERE student_id = ? AND status IN ('unpaid', 'partially_paid')
-          ORDER BY date(due_date) ASC, id ASC
+          ORDER BY due_date ASC, id ASC
         `).all(student.id);
       }
 
@@ -1405,8 +1406,8 @@ async function handleApi(req, res, pathname, query, body) {
     const today = getCairoDate();
 
     let sql = `
-      SELECT s.id, s.code, s.full_name, s.payment_due_day, c.name as classroom_name,
-             g.full_name as guardian_name, g.mobile as guardian_mobile,
+      SELECT s.id, s.code, s.full_name, s.payment_due_day, MAX(c.name) as classroom_name,
+             MAX(g.full_name) as guardian_name, MAX(g.mobile) as guardian_mobile,
              COALESCE(SUM(sc.net_amount), 0) as total_charges,
              COALESCE(SUM(sc.paid_amount), 0) as total_paid,
              COALESCE(SUM(sc.net_amount - sc.paid_amount), 0) as remaining_balance,
@@ -1429,10 +1430,10 @@ async function handleApi(req, res, pathname, query, body) {
       params.push(Number(classroom_id));
     }
 
-    sql += ' GROUP BY s.id HAVING remaining_balance > 0';
+    sql += ' GROUP BY s.id, s.code, s.full_name, s.payment_due_day HAVING COALESCE(SUM(sc.net_amount - sc.paid_amount), 0) > 0';
 
     if (filter === 'overdue') {
-      sql += ' AND date(earliest_due_date) < date(?)';
+      sql += ' AND MIN(CASE WHEN sc.status IN (\'unpaid\', \'partially_paid\') THEN sc.due_date ELSE NULL END) < ?';
       params.push(today);
     }
 
@@ -1703,11 +1704,11 @@ async function handleApi(req, res, pathname, query, body) {
       params.push(expStatus);
     }
     if (start_date) {
-      sql += ' AND date(e.expense_date) >= date(?)';
+      sql += ' AND e.expense_date >= ?';
       params.push(start_date);
     }
     if (end_date) {
-      sql += ' AND date(e.expense_date) <= date(?)';
+      sql += ' AND e.expense_date <= ?';
       params.push(end_date);
     }
 
@@ -2031,14 +2032,14 @@ async function handleApi(req, res, pathname, query, body) {
     const expParams = [];
 
     if (start_date) {
-      payDateFilter += ' AND date(payment_date) >= date(?)';
-      expDateFilter += ' AND date(expense_date) >= date(?)';
+      payDateFilter += ' AND payment_date >= ?';
+      expDateFilter += ' AND expense_date >= ?';
       payParams.push(start_date);
       expParams.push(start_date);
     }
     if (end_date) {
-      payDateFilter += ' AND date(payment_date) <= date(?)';
-      expDateFilter += ' AND date(expense_date) <= date(?)';
+      payDateFilter += ' AND payment_date <= ?';
+      expDateFilter += ' AND expense_date <= ?';
       payParams.push(end_date);
       expParams.push(end_date);
     }
