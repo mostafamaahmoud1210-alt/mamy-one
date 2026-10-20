@@ -1,4 +1,3 @@
-const url = require('node:url');
 const { handleApi } = require('../routes');
 const { runInDbContext } = require('../db');
 
@@ -14,35 +13,42 @@ module.exports = async (req, res) => {
     return;
   }
 
-  const parsedUrl = url.parse(req.url, true);
-
-  // Resolve true pathname:
-  // 1. From Vercel's x-matched-path header (e.g. "/api/auth/login")
-  // 2. From __path query parameter from vercel.json rewrite (e.g. "auth/login")
-  // 3. From req.url
-  let pathname = req.headers['x-matched-path']
-              || req.headers['x-invoke-path']
-              || (parsedUrl.query && parsedUrl.query.__path ? '/api/' + String(parsedUrl.query.__path).replace(/^\/+/, '') : null)
-              || parsedUrl.pathname;
-
-  // Clean pathname of query strings
-  pathname = url.parse(pathname).pathname;
-
-  // Strip trailing slashes
-  if (pathname.length > 1 && pathname.endsWith('/')) {
-    pathname = pathname.slice(0, -1);
+  // Parse URL cleanly using WHATWG URL (no deprecation warning)
+  let parsedUrl;
+  try {
+    parsedUrl = new URL(req.url, 'http://localhost');
+  } catch (e) {
+    parsedUrl = { pathname: req.url || '/', searchParams: new URLSearchParams() };
   }
 
-  // If pointing to index.js, fallback to query parameter or x-matched-path
-  if (pathname === '/api/index.js' || pathname === '/api/index' || pathname === '/api') {
-    if (parsedUrl.query && parsedUrl.query.__path) {
-      pathname = '/api/' + String(parsedUrl.query.__path).replace(/^\/+/, '');
-    } else if (req.headers['x-matched-path']) {
-      pathname = url.parse(req.headers['x-matched-path']).pathname;
+  // Extract query parameters
+  const query = {};
+  if (parsedUrl.searchParams) {
+    for (const [key, val] of parsedUrl.searchParams.entries()) {
+      if (key !== 'slug') query[key] = val;
+    }
+  }
+  if (req.query) {
+    for (const [key, val] of Object.entries(req.query)) {
+      if (key !== 'slug') query[key] = val;
     }
   }
 
-  // Ensure pathname starts with /api
+  // Resolve true API pathname
+  let pathname;
+  if (req.query && req.query.slug) {
+    const slugParts = Array.isArray(req.query.slug) ? req.query.slug : [req.query.slug];
+    pathname = '/api/' + slugParts.join('/');
+  } else if (req.headers && req.headers['x-matched-path']) {
+    pathname = req.headers['x-matched-path'];
+  } else if (query.__path) {
+    pathname = '/api/' + String(query.__path).replace(/^\/+/, '');
+  } else {
+    pathname = parsedUrl.pathname || '/api';
+  }
+
+  // Normalize pathname
+  pathname = pathname.replace(/\/+$/, ''); // remove trailing slash
   if (!pathname.startsWith('/api')) {
     pathname = '/api' + (pathname.startsWith('/') ? pathname : '/' + pathname);
   }
@@ -82,7 +88,7 @@ module.exports = async (req, res) => {
 
   try {
     await runInDbContext(async () => {
-      await handleApi(req, res, pathname, parsedUrl.query, body || {});
+      await handleApi(req, res, pathname, query, body || {});
     });
   } catch (err) {
     console.error('API Error in Vercel function:', err);
