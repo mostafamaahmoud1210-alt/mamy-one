@@ -4,3 +4,7 @@ Setup.exe
 *.log
 scratch/
 data/*backup*
+*.db-shm
+*.db-wal
+tests/*.db
+

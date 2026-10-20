@@ -71,7 +71,7 @@ function hasPermission(user, permission) {
 /**
  * Authenticate request helper from Authorization header
  */
-function authenticateRequest(req) {
+async function authenticateRequest(req) {
   const authHeader = req.headers['authorization'] || req.headers['Authorization'];
   if (!authHeader) return null;
 
@@ -80,7 +80,7 @@ function authenticateRequest(req) {
   if (!decoded || !decoded.userId) return null;
 
   // Verify user in DB and ensure active
-  const user = db.prepare('SELECT id, username, full_name, role, permissions, is_active FROM users WHERE id = ?').get(decoded.userId);
+  const user = await db.prepare('SELECT id, username, full_name, role, permissions, is_active FROM users WHERE id = ?').get(decoded.userId);
   if (!user || user.is_active !== 1) return null;
 
   try {

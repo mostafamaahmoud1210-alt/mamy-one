@@ -1,23 +1,16 @@
-const { DatabaseSync } = require('node:sqlite');
 const path = require('node:path');
 const fs = require('node:fs');
 const crypto = require('node:crypto');
+const { AsyncLocalStorage } = require('node:async_hooks');
 
-const DB_PATH = process.env.MAMY_DB_PATH || path.join(__dirname, 'data', 'mamy_one.db');
+const isPostgres = Boolean(process.env.DATABASE_URL);
 
-// Ensure data directory exists if not memory
-if (DB_PATH !== ':memory:') {
-  const dataDir = path.dirname(DB_PATH);
-  if (!fs.existsSync(dataDir)) {
-    fs.mkdirSync(dataDir, { recursive: true });
-  }
-}
+// Async local storage for transaction management
+const txContext = new AsyncLocalStorage();
 
-const db = new DatabaseSync(DB_PATH);
-
-// Configure SQLite pragmas for performance and data integrity
-db.exec('PRAGMA journal_mode = WAL;');
-db.exec('PRAGMA foreign_keys = ON;');
+let db;
+let pool = null;
+let sqliteDb = null;
 
 /**
  * Helper to get current timestamp in Africa/Cairo timezone (YYYY-MM-DD HH:mm:ss)
@@ -69,10 +62,253 @@ function verifyPassword(password, hash, salt) {
 }
 
 /**
- * Initialize all database schema tables
+ * SQL dialect converter: translates SQLite syntax to PostgreSQL
  */
-function initSchema() {
-  db.exec(`
+function convertSql(sql) {
+  // 1. Convert date(?) to date(?::text) to prevent Postgres untyped parameter errors
+  let s = sql.replace(/\bdate\s*\(\s*\?\s*\)/gi, 'date(?::text)');
+
+  // 2. Convert SQLite ? placeholders to PostgreSQL $1, $2, ...
+  let paramIndex = 1;
+  let inString = false;
+  let stringChar = '';
+  let result = '';
+
+  for (let i = 0; i < s.length; i++) {
+    const char = s[i];
+    if (inString) {
+      result += char;
+      if (char === stringChar) {
+        if (s[i + 1] === stringChar) {
+          result += s[++i]; // escaped quote
+        } else {
+          inString = false;
+        }
+      }
+    } else {
+      if (char === "'" || char === '"') {
+        inString = true;
+        stringChar = char;
+        result += char;
+      } else if (char === '?') {
+        result += '$' + paramIndex++;
+      } else {
+        result += char;
+      }
+    }
+  }
+
+  // 3. For INSERT statements without RETURNING, append RETURNING id
+  const trimmed = result.trim();
+  if (/^INSERT\s+INTO\b/i.test(trimmed) && !/\bRETURNING\b/i.test(trimmed)) {
+    result += ' RETURNING id';
+  }
+
+  return result;
+}
+
+/**
+ * Clean query parameters for PostgreSQL
+ */
+function sanitizeParams(args) {
+  const params = args.length === 1 && Array.isArray(args[0]) ? args[0] : args;
+  return params.map(p => {
+    if (p === undefined) return null;
+    if (typeof p === 'boolean') return p ? 1 : 0;
+    return p;
+  });
+}
+
+if (isPostgres) {
+  // -------------------------------------------------------------------------
+  // PostgreSQL / Supabase Driver (Cloud Mode)
+  // -------------------------------------------------------------------------
+  const { Pool, types } = require('pg');
+
+  // Parse NUMERIC (OID 1700) as float and BIGINT (OID 20) as integer
+  types.setTypeParser(1700, val => (val === null ? null : parseFloat(val)));
+  types.setTypeParser(20, val => (val === null ? null : parseInt(val, 10)));
+
+  pool = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: { rejectUnauthorized: false },
+    max: 10,
+    idleTimeoutMillis: 30000,
+    connectionTimeoutMillis: 10000
+  });
+
+  pool.on('error', (err) => {
+    console.error('Unexpected error on idle PostgreSQL client:', err);
+  });
+
+  function getPgRunner() {
+    const store = txContext.getStore();
+    if (store && store.client) {
+      return store.client;
+    }
+    return pool;
+  }
+
+  db = {
+    prepare(sql) {
+      const pgSql = convertSql(sql);
+      return {
+        async get(...args) {
+          const params = sanitizeParams(args);
+          const runner = getPgRunner();
+          const res = await runner.query(pgSql, params);
+          return res.rows[0] || undefined;
+        },
+        async all(...args) {
+          const params = sanitizeParams(args);
+          const runner = getPgRunner();
+          const res = await runner.query(pgSql, params);
+          return res.rows || [];
+        },
+        async run(...args) {
+          const params = sanitizeParams(args);
+          const runner = getPgRunner();
+          const res = await runner.query(pgSql, params);
+          let lastInsertRowid = null;
+          if (res.rows && res.rows[0] && res.rows[0].id !== undefined) {
+            lastInsertRowid = Number(res.rows[0].id);
+          }
+          return {
+            lastInsertRowid,
+            changes: res.rowCount || 0
+          };
+        }
+      };
+    },
+
+    async exec(sql) {
+      const clean = sql.trim().toUpperCase();
+      const store = txContext.getStore();
+
+      if (clean.startsWith('BEGIN')) {
+        if (store && store.client) return; // Already in transaction
+        const client = await pool.connect();
+        try {
+          await client.query('BEGIN');
+          if (store) {
+            store.client = client;
+          }
+        } catch (err) {
+          client.release();
+          throw err;
+        }
+        return;
+      }
+
+      if (clean.startsWith('COMMIT')) {
+        if (store && store.client) {
+          try {
+            await store.client.query('COMMIT');
+          } finally {
+            store.client.release();
+            store.client = null;
+          }
+        }
+        return;
+      }
+
+      if (clean.startsWith('ROLLBACK')) {
+        if (store && store.client) {
+          try {
+            await store.client.query('ROLLBACK');
+          } finally {
+            store.client.release();
+            store.client = null;
+          }
+        }
+        return;
+      }
+
+      const runner = getPgRunner();
+      await runner.query(sql);
+    }
+  };
+
+} else {
+  // -------------------------------------------------------------------------
+  // SQLite Driver (Local Offline Mode)
+  // -------------------------------------------------------------------------
+  const { DatabaseSync } = require('node:sqlite');
+
+  const DB_PATH = process.env.MAMY_DB_PATH || path.join(__dirname, 'data', 'mamy_one.db');
+
+  if (DB_PATH !== ':memory:') {
+    const dataDir = path.dirname(DB_PATH);
+    if (!fs.existsSync(dataDir)) {
+      fs.mkdirSync(dataDir, { recursive: true });
+    }
+  }
+
+  sqliteDb = new DatabaseSync(DB_PATH);
+
+  try {
+    sqliteDb.exec('PRAGMA journal_mode = WAL;');
+    sqliteDb.exec('PRAGMA foreign_keys = ON;');
+  } catch (e) {
+    // Ignore pragma errors if in memory or constrained
+  }
+
+  db = {
+    prepare(sql) {
+      const stmt = sqliteDb.prepare(sql);
+      return {
+        get(...args) {
+          const params = args.length === 1 && Array.isArray(args[0]) ? args[0] : args;
+          return stmt.get(...params);
+        },
+        all(...args) {
+          const params = args.length === 1 && Array.isArray(args[0]) ? args[0] : args;
+          return stmt.all(...params);
+        },
+        run(...args) {
+          const params = args.length === 1 && Array.isArray(args[0]) ? args[0] : args;
+          return stmt.run(...params);
+        }
+      };
+    },
+    exec(sql) {
+      return sqliteDb.exec(sql);
+    }
+  };
+
+  // Initialize SQLite schema
+  initSQLiteSchema();
+}
+
+/**
+ * Execute a block within database context (manages automatic transaction cleanup)
+ */
+async function runInDbContext(fn) {
+  if (!isPostgres) {
+    return await fn();
+  }
+  return txContext.run({ client: null }, async () => {
+    try {
+      return await fn();
+    } finally {
+      const store = txContext.getStore();
+      if (store && store.client) {
+        try {
+          await store.client.query('ROLLBACK');
+        } catch (e) {}
+        store.client.release();
+        store.client = null;
+      }
+    }
+  });
+}
+
+/**
+ * Initialize SQLite schema (for local offline mode)
+ */
+function initSQLiteSchema() {
+  if (!sqliteDb) return;
+  sqliteDb.exec(`
     -- System Settings
     CREATE TABLE IF NOT EXISTS settings (
       id INTEGER PRIMARY KEY CHECK (id = 1),
@@ -466,30 +702,30 @@ function initSchema() {
   `);
 
   // Seed default settings if empty
-  const settingsCount = db.prepare('SELECT COUNT(*) as count FROM settings').get();
+  const settingsCount = sqliteDb.prepare('SELECT COUNT(*) as count FROM settings').get();
   if (settingsCount.count === 0) {
-    db.prepare(`
+    sqliteDb.prepare(`
       INSERT INTO settings (id, nursery_name, slogan, phone, email, address, currency, created_at, updated_at)
       VALUES (1, 'حضانة مامي وان', 'بيئة تعليمية وتربوية متكاملة لأطفالنا', '01012345678', 'info@mamyone.com', 'القاهرة - مصر', 'ج.م', ?, ?)
     `).run(getCairoNow(), getCairoNow());
   }
 
   // Initialize and sync student_code_sequence with current state
-  const existingStuds = db.prepare('SELECT code FROM students WHERE code >= 1001').all();
+  const existingStuds = sqliteDb.prepare('SELECT code FROM students WHERE code >= 1001').all();
   const takenCodes = new Set(existingStuds.map(r => Number(r.code)));
   let lowestFree = 1001;
   while (takenCodes.has(lowestFree)) {
     lowestFree++;
   }
-  const seq = db.prepare('SELECT COUNT(*) as count FROM student_code_sequence').get();
+  const seq = sqliteDb.prepare('SELECT COUNT(*) as count FROM student_code_sequence').get();
   if (seq.count === 0) {
-    db.prepare('INSERT INTO student_code_sequence (id, next_code) VALUES (1, ?)').run(lowestFree);
+    sqliteDb.prepare('INSERT INTO student_code_sequence (id, next_code) VALUES (1, ?)').run(lowestFree);
   } else {
-    db.prepare('UPDATE student_code_sequence SET next_code = ? WHERE id = 1').run(lowestFree);
+    sqliteDb.prepare('UPDATE student_code_sequence SET next_code = ? WHERE id = 1').run(lowestFree);
   }
 
   // Seed standard expense categories if empty
-  const expCatCount = db.prepare('SELECT COUNT(*) as count FROM expense_categories').get();
+  const expCatCount = sqliteDb.prepare('SELECT COUNT(*) as count FROM expense_categories').get();
   if (expCatCount.count === 0) {
     const defaultCategories = [
       { code: 'teacher_salary', name: 'رواتب معلمات' },
@@ -505,14 +741,14 @@ function initSchema() {
       { code: 'marketing', name: 'تسويق وإعلانات ومطبوعات' },
       { code: 'other', name: 'مصروفات أخرى ونثرية' }
     ];
-    const insertCat = db.prepare('INSERT INTO expense_categories (code, name, is_custom, created_at) VALUES (?, ?, 0, ?)');
+    const insertCat = sqliteDb.prepare('INSERT INTO expense_categories (code, name, is_custom, created_at) VALUES (?, ?, 0, ?)');
     for (const c of defaultCategories) {
       insertCat.run(c.code, c.name, getCairoNow());
     }
   }
 
   // Seed default roles if empty
-  const roleCount = db.prepare('SELECT COUNT(*) as count FROM roles').get();
+  const roleCount = sqliteDb.prepare('SELECT COUNT(*) as count FROM roles').get();
   if (roleCount.count === 0) {
     const rolesList = [
       {
@@ -541,24 +777,24 @@ function initSchema() {
         ])
       }
     ];
-    const insertRole = db.prepare('INSERT INTO roles (name, display_name, description, permissions, created_at) VALUES (?, ?, ?, ?, ?)');
+    const insertRole = sqliteDb.prepare('INSERT INTO roles (name, display_name, description, permissions, created_at) VALUES (?, ?, ?, ?, ?)');
     for (const r of rolesList) {
       insertRole.run(r.name, r.display_name, r.description, r.permissions, getCairoNow());
     }
   }
 
   // Seed default Admin user if no users exist
-  const userCount = db.prepare('SELECT COUNT(*) as count FROM users').get();
+  const userCount = sqliteDb.prepare('SELECT COUNT(*) as count FROM users').get();
   if (userCount.count === 0) {
     const { hash, salt } = hashPassword('admin123');
-    db.prepare(`
+    sqliteDb.prepare(`
       INSERT INTO users (username, password_hash, salt, full_name, role, permissions, is_active, created_at, updated_at)
       VALUES (?, ?, ?, ?, 'admin', ?, 1, ?, ?)
     `).run('admin', hash, salt, 'مدير النظام (Admin)', JSON.stringify(['*']), getCairoNow(), getCairoNow());
   }
 
   // Seed default classrooms if empty
-  const classCount = db.prepare('SELECT COUNT(*) as count FROM classrooms').get();
+  const classCount = sqliteDb.prepare('SELECT COUNT(*) as count FROM classrooms').get();
   if (classCount.count === 0) {
     const defaultClasses = [
       { name: 'قاعة البراعم (Babies)', age_group: 'من 6 شهور إلى سنة ونصف', capacity: 10 },
@@ -566,7 +802,7 @@ function initSchema() {
       { name: 'قاعة النجوم (KG 1)', age_group: 'من سنتين ونصف إلى 4 سنوات', capacity: 15 },
       { name: 'قاعة العباقرة (KG 2)', age_group: 'من 4 سنوات إلى 6 سنوات', capacity: 18 }
     ];
-    const insertCls = db.prepare('INSERT INTO classrooms (name, age_group, capacity, created_at) VALUES (?, ?, ?, ?)');
+    const insertCls = sqliteDb.prepare('INSERT INTO classrooms (name, age_group, capacity, created_at) VALUES (?, ?, ?, ?)');
     for (const cls of defaultClasses) {
       insertCls.run(cls.name, cls.age_group, cls.capacity, getCairoNow());
     }
@@ -579,8 +815,8 @@ function initSchema() {
  * When a child is deleted or a code is freed, the lowest free code (>= 1001) is reused automatically.
  */
 function getNextStudentCode() {
-  const taken = new Set(db.prepare('SELECT code FROM students WHERE code >= 1001').all().map(r => Number(r.code)));
-  let seqRow = db.prepare('SELECT next_code FROM student_code_sequence WHERE id = 1').get();
+  const taken = new Set(sqliteDb.prepare('SELECT code FROM students WHERE code >= 1001').all().map(r => Number(r.code)));
+  let seqRow = sqliteDb.prepare('SELECT next_code FROM student_code_sequence WHERE id = 1').get();
   let code = seqRow ? Number(seqRow.next_code) : 1001;
 
   // If code is already taken in students table, advance until free
@@ -595,9 +831,9 @@ function getNextStudentCode() {
   }
 
   if (!seqRow) {
-    db.prepare('INSERT INTO student_code_sequence (id, next_code) VALUES (1, ?)').run(nextCandidate);
+    sqliteDb.prepare('INSERT INTO student_code_sequence (id, next_code) VALUES (1, ?)').run(nextCandidate);
   } else {
-    db.prepare('UPDATE student_code_sequence SET next_code = ? WHERE id = 1').run(nextCandidate);
+    sqliteDb.prepare('UPDATE student_code_sequence SET next_code = ? WHERE id = 1').run(nextCandidate);
   }
 
   return code;
@@ -609,7 +845,7 @@ function getNextStudentCode() {
 function getNextReceiptNumber() {
   const currentYear = new Date().getFullYear();
   const prefix = `REC-${currentYear}-`;
-  const row = db.prepare(`SELECT receipt_no FROM payments WHERE receipt_no LIKE ? ORDER BY id DESC LIMIT 1`).get(`${prefix}%`);
+  const row = sqliteDb.prepare(`SELECT receipt_no FROM payments WHERE receipt_no LIKE ? ORDER BY id DESC LIMIT 1`).get(`${prefix}%`);
   let seq = 1001;
   if (row && row.receipt_no) {
     const parts = row.receipt_no.split('-');
@@ -625,7 +861,7 @@ function getNextReceiptNumber() {
 function getNextExpenseReference() {
   const currentYear = new Date().getFullYear();
   const prefix = `EXP-${currentYear}-`;
-  const row = db.prepare(`SELECT reference_no FROM expenses WHERE reference_no LIKE ? ORDER BY id DESC LIMIT 1`).get(`${prefix}%`);
+  const row = sqliteDb.prepare(`SELECT reference_no FROM expenses WHERE reference_no LIKE ? ORDER BY id DESC LIMIT 1`).get(`${prefix}%`);
   let seq = 1;
   if (row && row.reference_no) {
     const parts = row.reference_no.split('-');
@@ -639,7 +875,7 @@ function getNextExpenseReference() {
  * Generate Next Employee Code (e.g., EMP-101)
  */
 function getNextEmployeeCode() {
-  const row = db.prepare(`SELECT code FROM employees ORDER BY id DESC LIMIT 1`).get();
+  const row = sqliteDb.prepare(`SELECT code FROM employees ORDER BY id DESC LIMIT 1`).get();
   let seq = 101;
   if (row && row.code) {
     const parts = row.code.split('-');
@@ -649,8 +885,78 @@ function getNextEmployeeCode() {
   return `EMP-${seq}`;
 }
 
-// Initialize tables on import
-initSchema();
+
+
+/**
+ * async function getNextStudentCode() {
+  const rows = await db.prepare('SELECT code FROM students WHERE code >= 1001').all();
+  const taken = new Set((rows || []).map(r => Number(r.code)));
+  let seqRow = await db.prepare('SELECT next_code FROM student_code_sequence WHERE id = 1').get();
+  let code = seqRow ? Number(seqRow.next_code) : 1001;
+
+  while (taken.has(code)) {
+    code++;
+  }
+
+  let nextCandidate = code + 1;
+  while (taken.has(nextCandidate)) {
+    nextCandidate++;
+  }
+
+  if (!seqRow) {
+    await db.prepare('INSERT INTO student_code_sequence (id, next_code) VALUES (1, ?)').run(nextCandidate);
+  } else {
+    await db.prepare('UPDATE student_code_sequence SET next_code = ? WHERE id = 1').run(nextCandidate);
+  }
+
+  return code;
+}
+
+/**
+ * Generate Next Receipt Number (e.g., REC-2026-1001)
+ */
+async function getNextReceiptNumber() {
+  const currentYear = new Date().getFullYear();
+  const prefix = `REC-${currentYear}-`;
+  const row = await db.prepare(`SELECT receipt_no FROM payments WHERE receipt_no LIKE ? ORDER BY id DESC LIMIT 1`).get(`${prefix}%`);
+  let seq = 1001;
+  if (row && row.receipt_no) {
+    const parts = row.receipt_no.split('-');
+    const lastNum = parseInt(parts[2], 10);
+    if (!isNaN(lastNum)) seq = lastNum + 1;
+  }
+  return `${prefix}${seq}`;
+}
+
+/**
+ * Generate Next Expense Reference Number (e.g., EXP-2026-0001)
+ */
+async function getNextExpenseReference() {
+  const currentYear = new Date().getFullYear();
+  const prefix = `EXP-${currentYear}-`;
+  const row = await db.prepare(`SELECT reference_no FROM expenses WHERE reference_no LIKE ? ORDER BY id DESC LIMIT 1`).get(`${prefix}%`);
+  let seq = 1;
+  if (row && row.reference_no) {
+    const parts = row.reference_no.split('-');
+    const lastNum = parseInt(parts[2], 10);
+    if (!isNaN(lastNum)) seq = lastNum + 1;
+  }
+  return `${prefix}${String(seq).padStart(4, '0')}`;
+}
+
+/**
+ * Generate Next Employee Code (e.g., EMP-101)
+ */
+async function getNextEmployeeCode() {
+  const row = await db.prepare(`SELECT code FROM employees ORDER BY id DESC LIMIT 1`).get();
+  let seq = 101;
+  if (row && row.code) {
+    const parts = row.code.split('-');
+    const lastNum = parseInt(parts[1], 10);
+    if (!isNaN(lastNum)) seq = lastNum + 1;
+  }
+  return `EMP-${seq}`;
+}
 
 module.exports = {
   db,
@@ -661,5 +967,6 @@ module.exports = {
   getNextStudentCode,
   getNextReceiptNumber,
   getNextExpenseReference,
-  getNextEmployeeCode
+  getNextEmployeeCode,
+  runInDbContext
 };

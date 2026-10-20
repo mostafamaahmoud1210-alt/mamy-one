@@ -3,7 +3,7 @@ const { db, getCairoNow } = require('./db');
 /**
  * Log an audit trail entry
  */
-function logAudit({
+async function logAudit({
   user,
   action,
   entityType,
@@ -17,7 +17,7 @@ function logAudit({
     const userName = user ? (user.full_name || user.username) : 'النظام (System)';
     const detailsStr = details ? (typeof details === 'string' ? details : JSON.stringify(details)) : null;
 
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO audit_logs (user_id, user_name, action, entity_type, entity_id, details, reason, ip_address, created_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(

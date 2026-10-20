@@ -27,10 +27,10 @@ console.log('--- بدء اختبارات الجودة ومعايير القبو�
 let testsPassed = 0;
 let testsTotal = 0;
 
-function runTest(name, testFn) {
+async function runTest(name, testFn) {
   testsTotal++;
   try {
-    testFn();
+    await testFn();
     console.log(`[PASS] ${name}`);
     testsPassed++;
   } catch (err) {
@@ -42,13 +42,14 @@ function runTest(name, testFn) {
 // -----------------------------------------------------------------------------
 // Test 1: Sequence & Unique Student Code
 // -----------------------------------------------------------------------------
-runTest('معيار 1: أول طفل يحصل على الكود 1001، والتالي 1002، والأكواد فريدة ولا تتكرر', () => {
+(async () => {
+await runTest('معيار 1: أول طفل يحصل على الكود 1001، والتالي 1002، والأكواد فريدة ولا تتكرر', async () => {
   // Reset sequence to 1001 for test validation
   db.prepare('UPDATE student_code_sequence SET next_code = 1001 WHERE id = 1').run();
 
-  const code1 = getNextStudentCode();
-  const code2 = getNextStudentCode();
-  const code3 = getNextStudentCode();
+  const code1 = await getNextStudentCode();
+  const code2 = await getNextStudentCode();
+  const code3 = await getNextStudentCode();
 
   assert.strictEqual(code1, 1001, 'أول كود يجب أن يكون 1001');
   assert.strictEqual(code2, 1002, 'ثاني كود يجب أن يكون 1002');
@@ -61,12 +62,12 @@ runTest('معيار 1: أول طفل يحصل على الكود 1001، والت�
 // -----------------------------------------------------------------------------
 let testStudentId = null;
 let testStudentCode = null;
-runTest('معيار 2: تسجيل طفل بمصروفات شهرية ينشئ المطالبة الصحيحة تلقائياً', () => {
+await runTest('معيار 2: تسجيل طفل بمصروفات شهرية ينشئ المطالبة الصحيحة تلقائياً', async () => {
   const maxCodeRow = db.prepare('SELECT MAX(code) as max_code FROM students').get();
   const nextSeq = Math.max(1001, (maxCodeRow && maxCodeRow.max_code ? maxCodeRow.max_code + 1 : 1001));
   db.prepare('UPDATE student_code_sequence SET next_code = ? WHERE id = 1').run(nextSeq);
 
-  const code = getNextStudentCode();
+  const code = await getNextStudentCode();
   testStudentCode = code;
   const now = getCairoNow();
   const tuition = 1500;
@@ -95,10 +96,10 @@ runTest('معيار 2: تسجيل طفل بمصروفات شهرية ينشئ ا
 // Test 3: Partial Payment & Outstanding Balance
 // -----------------------------------------------------------------------------
 let testPaymentId = null;
-runTest('معيار 3: تسجيل دفعة جزئية يحدث الرصيد المتبقي بدقة متناهية', () => {
+await runTest('معيار 3: تسجيل دفعة جزئية يحدث الرصيد المتبقي بدقة متناهية', async () => {
   const now = getCairoNow();
   const partialAmount = 600;
-  const receiptNo = getNextReceiptNumber();
+  const receiptNo = await getNextReceiptNumber();
 
   // Insert payment of 600 EGP
   const resP = db.prepare(`
@@ -138,7 +139,7 @@ runTest('معيار 3: تسجيل دفعة جزئية يحدث الرصيد ال
 // -----------------------------------------------------------------------------
 // Test 4: Additional Fees Tracked Independently
 // -----------------------------------------------------------------------------
-runTest('معيار 4: تتبع الرسوم الإضافية بشكل منفصل ودمجها بدقة في الرصيد الإجمالي', () => {
+await runTest('معيار 4: تتبع الرسوم الإضافية بشكل منفصل ودمجها بدقة في الرصيد الإجمالي', async () => {
   const now = getCairoNow();
   // Add uniform charge 400 EGP
   db.prepare(`
@@ -161,7 +162,7 @@ runTest('معيار 4: تتبع الرسوم الإضافية بشكل منفص�
 // -----------------------------------------------------------------------------
 // Test 5: Outstanding Fee Reports & Unpaid/Partial Classification
 // -----------------------------------------------------------------------------
-runTest('معيار 5: تقرير الرسوم المتأخرة يحدد الأطفال غير المسددين والمسددين جزئياً بدقة', () => {
+await runTest('معيار 5: تقرير الرسوم المتأخرة يحدد الأطفال غير المسددين والمسددين جزئياً بدقة', async () => {
   const outstanding = db.prepare(`
     SELECT s.id, s.code,
            SUM(sc.net_amount) as total_charges,
@@ -182,7 +183,7 @@ runTest('معيار 5: تقرير الرسوم المتأخرة يحدد الأ�
 // Test 6: Salary Payment Creates Exactly One Paid Expense
 // -----------------------------------------------------------------------------
 let testSalaryExpRef = null;
-runTest('معيار 6: صرف الراتب ينشئ مصروفاً واحداً مسدداً تلقائياً في الخزينة دون تكرار', () => {
+await runTest('معيار 6: صرف الراتب ينشئ مصروفاً واحداً مسدداً تلقائياً في الخزينة دون تكرار', async () => {
   const now = getCairoNow();
   // 1. Create employee & payroll
   const empRes = db.prepare(`
@@ -198,7 +199,7 @@ runTest('معيار 6: صرف الراتب ينشئ مصروفاً واحداً 
   const payrollId = Number(payRes.lastInsertRowid);
 
   // 2. Pay Salary Action
-  const expRef = getNextExpenseReference();
+  const expRef = await getNextExpenseReference();
   testSalaryExpRef = expRef;
 
   const insExp = db.prepare(`
@@ -227,9 +228,9 @@ runTest('معيار 6: صرف الراتب ينشئ مصروفاً واحداً 
 // -----------------------------------------------------------------------------
 // Test 7: Unpaid Expenses NOT Included in Cash Outflow
 // -----------------------------------------------------------------------------
-runTest('معيار 7: المصروفات غير المسددة لا تُحسب ضمن التدفقات النقدية الخارجة', () => {
+await runTest('معيار 7: المصروفات غير المسددة لا تُحسب ضمن التدفقات النقدية الخارجة', async () => {
   const now = getCairoNow();
-  const unpRef = getNextExpenseReference();
+  const unpRef = await getNextExpenseReference();
 
   // Create unpaid rent expense of 10,000 EGP
   db.prepare(`
@@ -250,7 +251,7 @@ runTest('معيار 7: المصروفات غير المسددة لا تُحسب 
 // -----------------------------------------------------------------------------
 // Test 8: Refunds and Reversals Preserve History
 // -----------------------------------------------------------------------------
-runTest('معيار 8: المرتجعات والتسويات تحتفظ بسجل المعاملات الأصلي ولا تحذفه', () => {
+await runTest('معيار 8: المرتجعات والتسويات تحتفظ بسجل المعاملات الأصلي ولا تحذفه', async () => {
   const now = getCairoNow();
   // Refund the test payment
   db.prepare(`
@@ -274,7 +275,7 @@ runTest('معيار 8: المرتجعات والتسويات تحتفظ بسجل
 // -----------------------------------------------------------------------------
 // Test 9 & 10: Role-Based Permissions & User Management
 // -----------------------------------------------------------------------------
-runTest('معيار 9 و 10: حظر المعلمات من الصلاحيات المالية وإمكانية تخصيص الصلاحيات للمدير', () => {
+await runTest('معيار 9 و 10: حظر المعلمات من الصلاحيات المالية وإمكانية تخصيص الصلاحيات للمدير', async () => {
   const teacherUser = {
     role: 'teacher',
     permissions: ['students_view', 'students_edit', 'attendance_record', 'sessions_manage']
@@ -303,8 +304,8 @@ runTest('معيار 9 و 10: حظر المعلمات من الصلاحيات ا�
 // -----------------------------------------------------------------------------
 // Test 11: Audit Logging
 // -----------------------------------------------------------------------------
-runTest('معيار 11: تسجيل كل عملية جوهرية في سجل المراقبة مع اسم المستخدم والوقت', () => {
-  logAudit({
+await runTest('معيار 11: تسجيل كل عملية جوهرية في سجل المراقبة مع اسم المستخدم والوقت', async () => {
+  await logAudit({
     user: { id: 1, full_name: 'مدير الاختبار' },
     action: 'TEST_AUDIT_ACTION',
     entityType: 'test_entity',
@@ -322,8 +323,8 @@ runTest('معيار 11: تسجيل كل عملية جوهرية في سجل ال
 // -----------------------------------------------------------------------------
 // Test 12: Scheduled Tasks Scan
 // -----------------------------------------------------------------------------
-runTest('معيار 12: عمل المهام المجدولة وفحص المتأخرات تلقائياً', () => {
-  const result = runScheduledTasks();
+await runTest('معيار 12: عمل المهام المجدولة وفحص المتأخرات تلقائياً', async () => {
+  const result = await runScheduledTasks();
   assert.strictEqual(result.success, true);
   assert(typeof result.overdueCount === 'number');
 });
@@ -331,7 +332,7 @@ runTest('معيار 12: عمل المهام المجدولة وفحص المتأ
 // -----------------------------------------------------------------------------
 // Test 13: Data Persistence Check
 // -----------------------------------------------------------------------------
-runTest('معيار 13: ثبات وحفظ البيانات في ملف قاعدة البيانات SQLite الدائم', () => {
+await runTest('معيار 13: ثبات وحفظ البيانات في ملف قاعدة البيانات SQLite الدائم', async () => {
   const rowCount = db.prepare('SELECT COUNT(*) as c FROM students').get().c;
   assert(rowCount > 0, 'بيانات الأطفال محفوظة في قاعدة البيانات');
 });
@@ -339,7 +340,7 @@ runTest('معيار 13: ثبات وحفظ البيانات في ملف قاعد�
 // -----------------------------------------------------------------------------
 // Test 14: Arabic RTL Layout & Assets Verification
 // -----------------------------------------------------------------------------
-runTest('معيار 14: الواجهة العربية وتخطيط RTL متكامل للمتصفح والأجهزة المحمولة', () => {
+await runTest('معيار 14: الواجهة العربية وتخطيط RTL متكامل للمتصفح والأجهزة المحمولة', async () => {
   const indexPath = path.join(__dirname, '..', 'public', 'index.html');
   const indexContent = fs.readFileSync(indexPath, 'utf8');
   assert(indexContent.includes('dir="rtl"'), 'اتجاه الصفحة يجب أن يكون RTL');
@@ -356,7 +357,7 @@ runTest('معيار 14: الواجهة العربية وتخطيط RTL متكا�
 // -----------------------------------------------------------------------------
 // Test 15: Export & Financial Ledger Reconciliation
 // -----------------------------------------------------------------------------
-runTest('معيار 15: مطابقة الإجماليات المالية مع سجل المعاملات التفصيلي بدقة 100%', () => {
+await runTest('معيار 15: مطابقة الإجماليات المالية مع سجل المعاملات التفصيلي بدقة 100%', async () => {
   // Sum of individual payments vs ledger total
   const individualSum = db.prepare(`
     SELECT COALESCE(SUM(amount), 0) as total FROM payments WHERE status = 'completed'
@@ -388,3 +389,5 @@ console.log(`\n=============================================================`);
 console.log(`نجحت جميع الاختبارات بنجاح! (${testsPassed}/${testsTotal})`);
 console.log(`=============================================================`);
 
+
+})();

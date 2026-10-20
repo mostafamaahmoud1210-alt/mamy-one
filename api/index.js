@@ -1,5 +1,6 @@
 const url = require('node:url');
 const { handleApi } = require('../routes');
+const { runInDbContext } = require('../db');
 
 module.exports = async (req, res) => {
   // CORS Headers
@@ -27,7 +28,12 @@ module.exports = async (req, res) => {
     try {
       body = JSON.parse(body);
     } catch (e) {
-      body = {};
+      try {
+        const params = new URLSearchParams(body);
+        body = Object.fromEntries(params.entries());
+      } catch (e2) {
+        body = {};
+      }
     }
   } else if (!body && (req.method === 'POST' || req.method === 'PUT' || req.method === 'PATCH')) {
     body = await new Promise((resolve) => {
@@ -37,7 +43,12 @@ module.exports = async (req, res) => {
         try {
           resolve(JSON.parse(data));
         } catch (e) {
-          resolve({});
+          try {
+            const params = new URLSearchParams(data);
+            resolve(Object.fromEntries(params.entries()));
+          } catch (e2) {
+            resolve({});
+          }
         }
       });
       req.on('error', () => resolve({}));
@@ -45,11 +56,16 @@ module.exports = async (req, res) => {
   }
 
   try {
-    await handleApi(req, res, pathname, parsedUrl.query, body || {});
+    await runInDbContext(async () => {
+      await handleApi(req, res, pathname, parsedUrl.query, body || {});
+    });
   } catch (err) {
     console.error('API Error in Vercel function:', err);
     if (!res.headersSent) {
-      res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.writeHead(500, {
+        'Content-Type': 'application/json; charset=utf-8',
+        'Access-Control-Allow-Origin': '*'
+      });
       res.end(JSON.stringify({ success: false, error: 'Internal Server Error', details: err.message }));
     }
   }

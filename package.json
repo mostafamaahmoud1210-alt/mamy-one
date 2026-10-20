@@ -2,7 +2,7 @@
   "name": "mamy-one",
   "version": "1.0.0",
   "description": "Mamy One – Complete Production-Ready Nursery Management System in Arabic",
-  "main": "server.js",
+  "main": "api/index.js",
   "scripts": {
     "start": "node server.js",
     "test": "node tests/test_acceptance.js"
