@@ -129,8 +129,21 @@ if (isPostgres) {
   types.setTypeParser(1700, val => (val === null ? null : parseFloat(val)));
   types.setTypeParser(20, val => (val === null ? null : parseInt(val, 10)));
 
+  let connString = process.env.DATABASE_URL || '';
+  if (connString.includes('.supabase.co')) {
+    const match = connString.match(/postgres:([^@]+)@db\.([a-z0-9]+)\.supabase\.co/);
+    if (match) {
+      const password = match[1];
+      const projectRef = match[2];
+      // Supabase direct host db.<ref>.supabase.co is IPv6 only, which Vercel cannot route.
+      // Automatically route to the Supabase IPv4 Pooler (Session Mode port 5432):
+      connString = `postgresql://postgres.${projectRef}:${password}@aws-0-eu-west-1.pooler.supabase.com:5432/postgres`;
+      console.log('Auto-routed Supabase connection to IPv4 Pooler');
+    }
+  }
+
   pool = new Pool({
-    connectionString: process.env.DATABASE_URL,
+    connectionString: connString,
     ssl: { rejectUnauthorized: false },
     max: 10,
     idleTimeoutMillis: 30000,

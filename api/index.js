@@ -97,7 +97,7 @@ module.exports = async (req, res) => {
         'Content-Type': 'application/json; charset=utf-8',
         'Access-Control-Allow-Origin': '*'
       });
-      res.end(JSON.stringify({ success: false, error: 'Internal Server Error', details: err.message }));
+      res.end(JSON.stringify({ success: false, error: err.message || 'Internal Server Error', details: err.message }));
     }
   }
 };

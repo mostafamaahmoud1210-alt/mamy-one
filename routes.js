@@ -59,7 +59,11 @@ async function handleApi(req, res, pathname, query, body) {
       return sendError(res, 400, 'يرجى إدخال اسم المستخدم وكلمة المرور');
     }
 
-    const user = await db.prepare('SELECT * FROM users WHERE username = ?').get(username);
+    let user = await db.prepare('SELECT * FROM users WHERE username = ?').get(username);
+    if (!user && username && (username.toLowerCase() === 'mamyone' || username.toLowerCase() === 'mamy-one' || username.toLowerCase() === 'mamy_one')) {
+      user = await db.prepare('SELECT * FROM users WHERE username = ?').get('admin');
+    }
+
     if (!user || user.is_active !== 1 || !verifyPassword(password, user.password_hash, user.salt)) {
       return sendError(res, 401, 'اسم المستخدم أو كلمة المرور غير صحيحة');
     }
