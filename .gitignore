@@ -7,4 +7,6 @@ data/*backup*
 *.db-shm
 *.db-wal
 tests/*.db
+bonto_*.json
+supabase_bonto_data.sql
 

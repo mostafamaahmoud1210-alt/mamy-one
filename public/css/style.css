@@ -49,6 +49,33 @@ body {
   background: #94a3b8;
 }
 
+/* Independent Sidebar Scrolling */
+#sidebar-nav {
+  position: sticky !important;
+  top: 5rem !important;
+  max-height: calc(100vh - 6rem) !important;
+  overflow-y: auto !important;
+  overscroll-behavior: contain !important;
+  -webkit-overflow-scrolling: touch;
+}
+
+#sidebar-nav::-webkit-scrollbar {
+  width: 4px;
+}
+
+#sidebar-nav::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+#sidebar-nav::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+#sidebar-nav::-webkit-scrollbar-thumb:hover {
+  background: #0d9488;
+}
+
 /* Card Styling */
 .card {
   background-color: var(--card-bg);
