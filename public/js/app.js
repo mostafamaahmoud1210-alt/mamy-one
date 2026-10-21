@@ -443,6 +443,14 @@ async function loadNotifications() {
 function navigateTo(page) {
   state.currentPage = page;
 
+  // On mobile devices, auto-close sidebar when navigating
+  if (window.innerWidth < 768) {
+    const sidebar = document.getElementById('sidebar-nav');
+    if (sidebar && !sidebar.classList.contains('hidden')) {
+      sidebar.classList.add('hidden');
+    }
+  }
+
   // Update sidebar active classes
   document.querySelectorAll('.nav-item').forEach(btn => {
     if (btn.dataset.page === page) {
@@ -5396,22 +5404,42 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   });
 
+  // Mobile drawer helper to auto-close
+  const closeMobileSidebar = () => {
+    if (window.innerWidth < 768) {
+      const sidebar = document.getElementById('sidebar-nav');
+      if (sidebar && !sidebar.classList.contains('hidden')) {
+        sidebar.classList.add('hidden');
+      }
+    }
+  };
+
   // Mobile drawer toggle
   const toggleBtn = document.getElementById('btn-toggle-sidebar');
   const sidebar = document.getElementById('sidebar-nav');
   if (toggleBtn && sidebar) {
-    toggleBtn.addEventListener('click', () => {
+    toggleBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
       sidebar.classList.toggle('hidden');
     });
   }
 
   // Quick Action Buttons in Sidebar
-  document.getElementById('btn-quick-add-student').addEventListener('click', openAddStudentModal);
+  document.getElementById('btn-quick-add-student').addEventListener('click', () => {
+    closeMobileSidebar();
+    openAddStudentModal();
+  });
   const quickCardBtn = document.getElementById('btn-quick-card-designer');
   if (quickCardBtn) {
-    quickCardBtn.addEventListener('click', () => openStudentIdCardModal());
+    quickCardBtn.addEventListener('click', () => {
+      closeMobileSidebar();
+      openStudentIdCardModal();
+    });
   }
-  document.getElementById('btn-quick-add-payment').addEventListener('click', openAddPaymentModal);
+  document.getElementById('btn-quick-add-payment').addEventListener('click', () => {
+    closeMobileSidebar();
+    openAddPaymentModal();
+  });
 
   // User Profile Modal Click (Header + Sidebar)
   const userProfileBtn = document.getElementById('btn-user-profile');
@@ -5420,8 +5448,24 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
   const sbProfileBtn = document.getElementById('btn-sidebar-user-profile');
   if (sbProfileBtn) {
-    sbProfileBtn.addEventListener('click', openUserProfileModal);
+    sbProfileBtn.addEventListener('click', () => {
+      closeMobileSidebar();
+      openUserProfileModal();
+    });
   }
+
+  // Close sidebar on click outside on mobile
+  document.addEventListener('click', (e) => {
+    if (window.innerWidth < 768) {
+      const sb = document.getElementById('sidebar-nav');
+      const tb = document.getElementById('btn-toggle-sidebar');
+      if (sb && !sb.classList.contains('hidden')) {
+        if (!sb.contains(e.target) && tb && !tb.contains(e.target)) {
+          sb.classList.add('hidden');
+        }
+      }
+    }
+  });
 
   // Logout Button
   document.getElementById('btn-logout').addEventListener('click', logout);

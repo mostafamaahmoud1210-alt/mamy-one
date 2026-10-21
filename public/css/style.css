@@ -49,14 +49,32 @@ body {
   background: #94a3b8;
 }
 
-/* Independent Sidebar Scrolling */
-#sidebar-nav {
-  position: sticky !important;
-  top: 5rem !important;
-  max-height: calc(100vh - 6rem) !important;
-  overflow-y: auto !important;
-  overscroll-behavior: contain !important;
-  -webkit-overflow-scrolling: touch;
+/* Sidebar Scrolling & Positioning */
+@media (min-width: 768px) {
+  #sidebar-nav {
+    position: sticky !important;
+    top: 5rem !important;
+    max-height: calc(100vh - 6rem) !important;
+    overflow-y: auto !important;
+    overscroll-behavior: contain !important;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+@media (max-width: 767px) {
+  #sidebar-nav {
+    position: fixed !important;
+    top: 4.5rem !important;
+    right: 1rem !important;
+    left: 1rem !important;
+    width: auto !important;
+    max-height: calc(100vh - 5.5rem) !important;
+    overflow-y: auto !important;
+    overscroll-behavior: contain !important;
+    z-index: 50 !important;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.2), 0 8px 10px -6px rgba(0, 0, 0, 0.2) !important;
+    -webkit-overflow-scrolling: touch;
+  }
 }
 
 #sidebar-nav::-webkit-scrollbar {
