@@ -682,7 +682,7 @@ async function renderDashboard(container) {
 
         </div>
 
-        <div class="flex items-center justify-between text-xs pt-3 border-t border-slate-100">
+        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 text-xs pt-3 border-t border-slate-100">
           <button onclick="navigateTo('reports')" class="text-teal-600 font-bold hover:underline">عرض التقرير المالي المفصل وتدفقات الخزينة ←</button>
           <button onclick="navigateTo('outstanding')" class="text-amber-600 font-bold hover:underline">متابعة المتأخرات وتذكير أولياء الأمور ←</button>
         </div>
@@ -799,47 +799,47 @@ async function renderStudents(container) {
 
   container.innerHTML = `
     <!-- Header with Search & Filters -->
-    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
       <div>
         <h2 class="text-lg font-bold text-slate-900 flex items-center gap-2">
           <span>👶</span> <span>إدارة شؤون وملفات الأطفال</span>
         </h2>
         <p class="text-xs text-slate-500">إجمالي الأطفال المسجلين: <strong class="text-teal-600">${students.length}</strong> طفل</p>
       </div>
-      <div class="flex items-center gap-2">
-        <button id="btn-card-designer-page" class="px-3 py-2 rounded-xl border border-teal-200 bg-teal-50 hover:bg-teal-100 text-teal-800 text-xs font-bold transition flex items-center gap-1.5 shadow-xs">
-          <span>🪪</span> <span>مصمم كارنيهات الأطفال</span>
+      <div class="flex items-center gap-2 w-full sm:w-auto">
+        <button id="btn-card-designer-page" class="flex-1 sm:flex-none px-3 py-2 rounded-xl border border-teal-200 bg-teal-50 hover:bg-teal-100 text-teal-800 text-xs font-bold transition flex items-center justify-center gap-1.5 shadow-xs">
+          <span>🪪</span> <span>كارنيهات الأطفال</span>
         </button>
-        <button id="btn-add-student-page" class="btn btn-primary text-xs font-bold">
+        <button id="btn-add-student-page" class="flex-1 sm:flex-none btn btn-primary text-xs font-bold justify-center">
           <span>+</span> <span>تسجيل طفل جديد</span>
         </button>
       </div>
     </div>
 
     <!-- Filter Bar -->
-    <div class="card p-4 bg-white flex flex-col md:flex-row items-center gap-3">
-      <div class="relative flex-1 w-full">
+    <div class="card p-3 sm:p-4 bg-white flex flex-col gap-3">
+      <div class="relative w-full">
         <input type="text" id="students-search-input" placeholder="بحث بالاسم، كود الطفل، اسم ولي الأمر، أو رقم الهاتف..."
-               class="w-full pl-4 pr-10 py-2 rounded-xl border border-slate-200 text-xs focus:border-teal-500 outline-none">
-        <span class="absolute right-3.5 top-2.5 text-slate-400">🔍</span>
+               class="w-full pl-4 pr-10 py-2.5 rounded-xl border border-slate-200 text-xs focus:border-teal-500 outline-none">
+        <span class="absolute right-3.5 top-3 text-slate-400">🔍</span>
       </div>
 
-      <div class="flex items-center gap-2 w-full md:w-auto">
-        <select id="students-filter-status" class="px-3 py-2 rounded-xl border border-slate-200 text-xs text-slate-700 bg-white outline-none">
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 w-full">
+        <select id="students-filter-status" class="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs text-slate-700 bg-white outline-none">
           <option value="">كافة الحالات</option>
           <option value="active" selected>نشط ومنتظم</option>
           <option value="suspended">موقوف مؤقتاً</option>
           <option value="withdrawn">منسحب</option>
         </select>
 
-        <select id="students-filter-classification" class="px-3 py-2 rounded-xl border border-slate-200 text-xs text-slate-700 bg-white outline-none">
+        <select id="students-filter-classification" class="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs text-slate-700 bg-white outline-none">
           <option value="">كافة التصنيفات</option>
           <option value="regular">طفل طبيعي</option>
           <option value="learning_difficulties">صعوبات تعلم</option>
           <option value="speech_therapy">تخاطب</option>
         </select>
 
-        <select id="students-filter-class" class="px-3 py-2 rounded-xl border border-slate-200 text-xs text-slate-700 bg-white outline-none">
+        <select id="students-filter-class" class="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs text-slate-700 bg-white outline-none">
           <option value="">كافة القاعات</option>
           ${classrooms.map(c => `<option value="${c.id}">${c.name}</option>`).join('')}
         </select>
@@ -886,8 +886,12 @@ async function renderStudents(container) {
     }
 
     container.innerHTML = `
-      <div class="overflow-x-auto">
-        <table class="w-full text-right text-xs">
+      <div class="mobile-table-hint md:hidden">
+        <span class="flex items-center gap-1.5"><span>👈</span> <span>اسحب الجدول لليسار لعرض باقي التفاصيل والإجراءات</span></span>
+        <span>👉</span>
+      </div>
+      <div class="overflow-x-auto w-full">
+        <table class="w-full min-w-[850px] text-right text-xs">
           <thead class="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold">
             <tr>
               <th class="p-3.5">الكود</th>
@@ -2226,60 +2230,60 @@ async function renderCharges(container) {
 
   container.innerHTML = `
     <!-- Header -->
-    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
       <div>
         <h2 class="text-lg font-bold text-slate-900 flex items-center gap-2">
           <span>📋</span> <span>قائمة الالتزامات والمطالبات المالية</span>
         </h2>
         <p class="text-xs text-slate-500">حصر شامل ومتابعة مرنة لكافة الرسوم والاشتراكات مع إمكانية التعديل والإلغاء المباشر</p>
       </div>
-      <div class="flex items-center gap-2">
-        <button onclick="triggerRestoreOctoberBalances()" class="px-3 py-2 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 text-xs font-bold flex items-center gap-1.5 shadow-xs transition" title="فحص وإلغاء أي رسوم مكررة واستعادة حسابات شهر أكتوبر الأصلية">
-          <span>🧹</span> <span>استعادة حسابات أكتوبر وإزالة الرسوم الزائدة</span>
+      <div class="flex flex-wrap sm:flex-nowrap items-center gap-2 w-full sm:w-auto">
+        <button onclick="triggerRestoreOctoberBalances()" class="flex-1 sm:flex-none px-3 py-2 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 text-xs font-bold flex items-center justify-center gap-1.5 shadow-xs transition" title="فحص وإلغاء أي رسوم مكررة واستعادة حسابات شهر أكتوبر الأصلية">
+          <span>🧹</span> <span>استعادة حسابات أكتوبر</span>
         </button>
-        <button onclick="openAddChargeModal()" class="btn btn-primary text-xs font-bold flex items-center gap-1.5">
+        <button onclick="openAddChargeModal()" class="flex-1 sm:flex-none btn btn-primary text-xs font-bold flex items-center justify-center gap-1.5">
           <span>+</span> <span>إضافة التزام مالي جديد</span>
         </button>
       </div>
     </div>
 
     <!-- Summary KPI Cards -->
-    <div class="grid grid-cols-1 sm:grid-cols-4 gap-3">
-      <div class="card p-3.5 bg-white border-slate-200">
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3">
+      <div class="card p-3 sm:p-3.5 bg-white border-slate-200">
         <div class="text-[11px] text-slate-500">إجمالي الالتزامات المطلوبة</div>
-        <div class="text-lg font-black text-slate-800 mt-1">${formatEGP(totalNet)}</div>
+        <div class="text-base sm:text-lg font-black text-slate-800 mt-1">${formatEGP(totalNet)}</div>
       </div>
-      <div class="card p-3.5 bg-white border-slate-200">
+      <div class="card p-3 sm:p-3.5 bg-white border-slate-200">
         <div class="text-[11px] text-slate-500">المحصل فعلياً</div>
-        <div class="text-lg font-black text-emerald-600 mt-1">${formatEGP(totalPaid)}</div>
+        <div class="text-base sm:text-lg font-black text-emerald-600 mt-1">${formatEGP(totalPaid)}</div>
       </div>
-      <div class="card p-3.5 bg-white border-slate-200">
+      <div class="card p-3 sm:p-3.5 bg-white border-slate-200">
         <div class="text-[11px] text-slate-500">المتبقي قيد التحصيل</div>
-        <div class="text-lg font-black text-rose-600 mt-1">${formatEGP(totalRemaining)}</div>
+        <div class="text-base sm:text-lg font-black text-rose-600 mt-1">${formatEGP(totalRemaining)}</div>
       </div>
-      <div class="card p-3.5 bg-white border-slate-200">
+      <div class="card p-3 sm:p-3.5 bg-white border-slate-200">
         <div class="text-[11px] text-slate-500">إجمالي عدد البنود</div>
-        <div class="text-lg font-black text-teal-600 mt-1">${allCharges.length} بند</div>
+        <div class="text-base sm:text-lg font-black text-teal-600 mt-1">${allCharges.length} بند</div>
       </div>
     </div>
 
     <!-- Filter Bar -->
-    <div class="card p-4 bg-white flex flex-col md:flex-row items-center gap-3">
-      <div class="relative flex-1 w-full">
+    <div class="card p-3 sm:p-4 bg-white flex flex-col gap-3">
+      <div class="relative w-full">
         <input type="text" id="charges-search-input" placeholder="بحث باسم الطفل، الكود، أو بيان الالتزام..."
-               class="w-full pl-4 pr-10 py-2 rounded-xl border border-slate-200 text-xs focus:border-teal-500 outline-none">
-        <span class="absolute right-3.5 top-2.5 text-slate-400">🔍</span>
+               class="w-full pl-4 pr-10 py-2.5 rounded-xl border border-slate-200 text-xs focus:border-teal-500 outline-none">
+        <span class="absolute right-3.5 top-3 text-slate-400">🔍</span>
       </div>
 
-      <div class="flex items-center gap-2 w-full md:w-auto">
-        <select id="charges-filter-status" class="px-3 py-2 rounded-xl border border-slate-200 text-xs text-slate-700 bg-white outline-none">
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full">
+        <select id="charges-filter-status" class="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs text-slate-700 bg-white outline-none">
           <option value="">كافة الحالات</option>
           <option value="unpaid">غير مسدد</option>
           <option value="partially_paid">مسدد جزئياً</option>
           <option value="paid">مسدد بالكامل</option>
         </select>
 
-        <select id="charges-filter-type" class="px-3 py-2 rounded-xl border border-slate-200 text-xs text-slate-700 bg-white outline-none">
+        <select id="charges-filter-type" class="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs text-slate-700 bg-white outline-none">
           <option value="">كافة أنواع الرسوم</option>
           <option value="tuition">مصروفات شهرية</option>
           <option value="bus">اشتراك باص</option>
@@ -2323,8 +2327,12 @@ async function renderCharges(container) {
     }
 
     tableContainer.innerHTML = `
-      <div class="overflow-x-auto">
-        <table class="w-full text-right text-xs">
+      <div class="mobile-table-hint md:hidden">
+        <span class="flex items-center gap-1.5"><span>👈</span> <span>اسحب الجدول لليسار لعرض باقي التفاصيل والإجراءات</span></span>
+        <span>👉</span>
+      </div>
+      <div class="overflow-x-auto w-full">
+        <table class="w-full min-w-[850px] text-right text-xs">
           <thead class="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold">
             <tr>
               <th class="p-3.5">الكود</th>
@@ -3776,15 +3784,15 @@ async function renderPayments(container) {
   const payments = res.payments;
 
   container.innerHTML = `
-    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
       <div>
         <h2 class="text-lg font-bold text-slate-900 flex items-center gap-2">
           <span>💵</span> <span>دفتر المقبوضات وسندات القبض</span>
         </h2>
         <p class="text-xs text-slate-500">سجل كافة المدفوعات النقدية والبنكية الصادرة بدقة</p>
       </div>
-      <div>
-        <button onclick="openAddPaymentModal()" class="btn btn-primary text-xs font-bold">
+      <div class="w-full sm:w-auto">
+        <button onclick="openAddPaymentModal()" class="btn btn-primary text-xs font-bold w-full sm:w-auto justify-center">
           <span>+</span> <span>تسجيل سند قبض جديد</span>
         </button>
       </div>
@@ -3794,8 +3802,12 @@ async function renderPayments(container) {
       ${payments.length === 0 ? `
         <div class="p-12 text-center text-slate-400 text-xs">لا توجد حركات دفع مسجلة بعد</div>
       ` : `
-        <div class="overflow-x-auto">
-          <table class="w-full text-right text-xs">
+        <div class="mobile-table-hint md:hidden">
+          <span class="flex items-center gap-1.5"><span>👈</span> <span>اسحب الجدول لليسار لعرض باقي التفاصيل والإجراءات</span></span>
+          <span>👉</span>
+        </div>
+        <div class="overflow-x-auto w-full">
+          <table class="w-full min-w-[800px] text-right text-xs">
             <thead class="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold">
               <tr>
                 <th class="p-3.5">رقم السند</th>
@@ -3898,18 +3910,18 @@ async function renderOutstanding(container) {
   const list = res.records;
 
   container.innerHTML = `
-    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
       <div>
         <h2 class="text-lg font-bold text-slate-900 flex items-center gap-2">
           <span>⚠️</span> <span>كشف الرسوم المتأخرة وتذكيرات أولياء الأمور</span>
         </h2>
         <p class="text-xs text-slate-500">الأطفال الذين عليهم متبقيات مستحقة: <strong class="text-rose-600">${list.length}</strong> طفل</p>
       </div>
-      <div class="flex items-center gap-2">
-        <button id="btn-export-outstanding-excel" class="btn btn-secondary text-xs">
+      <div class="flex items-center gap-2 w-full sm:w-auto">
+        <button id="btn-export-outstanding-excel" class="flex-1 sm:flex-none btn btn-secondary text-xs justify-center">
           📊 تصدير Excel
         </button>
-        <button onclick="window.print()" class="btn btn-secondary text-xs">
+        <button onclick="window.print()" class="flex-1 sm:flex-none btn btn-secondary text-xs justify-center">
           🖨️ طباعة الكشف
         </button>
       </div>
@@ -3919,8 +3931,12 @@ async function renderOutstanding(container) {
       ${list.length === 0 ? `
         <div class="p-12 text-center text-slate-400 text-xs">لا توجد رسوم متأخرة على الإطلاق! جميع الحسابات مسددة بالكامل ✓</div>
       ` : `
-        <div class="overflow-x-auto">
-          <table class="w-full text-right text-xs">
+        <div class="mobile-table-hint md:hidden">
+          <span class="flex items-center gap-1.5"><span>👈</span> <span>اسحب الجدول لليسار لعرض باقي التفاصيل والتذكير</span></span>
+          <span>👉</span>
+        </div>
+        <div class="overflow-x-auto w-full">
+          <table class="w-full min-w-[750px] text-right text-xs">
             <thead class="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold">
               <tr>
                 <th class="p-3.5">الكود</th>
@@ -4026,18 +4042,18 @@ async function renderExpenses(container) {
   const expenses = res.expenses;
 
   container.innerHTML = `
-    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
       <div>
         <h2 class="text-lg font-bold text-slate-900 flex items-center gap-2">
           <span>📉</span> <span>سجل المصروفات والنفقات التشغيلية</span>
         </h2>
         <p class="text-xs text-slate-500">حصر دقيق للمصروفات المدفوعة والالتزامات المعلقة</p>
       </div>
-      <div class="flex items-center gap-2">
-        <button id="btn-daily-cash-closing" class="btn btn-secondary text-xs font-bold">
+      <div class="flex items-center gap-2 w-full sm:w-auto">
+        <button id="btn-daily-cash-closing" class="flex-1 sm:flex-none btn btn-secondary text-xs font-bold justify-center">
           🏦 إغلاق الخزينة اليومي
         </button>
-        <button id="btn-add-expense" class="btn btn-primary text-xs font-bold">
+        <button id="btn-add-expense" class="flex-1 sm:flex-none btn btn-primary text-xs font-bold justify-center">
           <span>+</span> <span>تسجيل مصروف جديد</span>
         </button>
       </div>
@@ -4047,8 +4063,12 @@ async function renderExpenses(container) {
       ${expenses.length === 0 ? `
         <div class="p-12 text-center text-slate-400 text-xs">لا توجد مصروفات مسجلة بعد</div>
       ` : `
-        <div class="overflow-x-auto">
-          <table class="w-full text-right text-xs">
+        <div class="mobile-table-hint md:hidden">
+          <span class="flex items-center gap-1.5"><span>👈</span> <span>اسحب الجدول لليسار لعرض باقي التفاصيل والإجراءات</span></span>
+          <span>👉</span>
+        </div>
+        <div class="overflow-x-auto w-full">
+          <table class="w-full min-w-[750px] text-right text-xs">
             <thead class="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold">
               <tr>
                 <th class="p-3.5">الرقم المرجعي</th>
@@ -4319,26 +4339,26 @@ async function renderPayroll(container) {
   const employees = empRes ? empRes.employees : [];
 
   container.innerHTML = `
-    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
       <div>
         <h2 class="text-lg font-bold text-slate-900 flex items-center gap-2">
           <span>👩‍🏫</span> <span>شؤون الموظفين ومسير الرواتب</span>
         </h2>
         <p class="text-xs text-slate-500">إدارة كادر العمل وحسابات وصرف الرواتب الشهرية</p>
       </div>
-      <div class="flex items-center gap-2">
-        <button id="btn-add-employee" class="btn btn-secondary text-xs">
+      <div class="flex flex-wrap sm:flex-nowrap items-center gap-2 w-full sm:w-auto">
+        <button id="btn-add-employee" class="flex-1 sm:flex-none btn btn-secondary text-xs justify-center">
           <span>+</span> <span>إضافة موظف جديد</span>
         </button>
-        <button id="btn-generate-payroll" class="btn btn-primary text-xs font-bold">
-          <span>⚡</span> <span>إصدار مسير رواتب الشهر (${currentMonth})</span>
+        <button id="btn-generate-payroll" class="flex-1 sm:flex-none btn btn-primary text-xs font-bold justify-center">
+          <span>⚡</span> <span>إصدار مسير (${currentMonth})</span>
         </button>
       </div>
     </div>
 
     <!-- Payroll Sheet Table -->
     <div class="card bg-white overflow-hidden">
-      <div class="p-4 border-b border-slate-100 flex items-center justify-between">
+      <div class="p-3 sm:p-4 border-b border-slate-100 flex items-center justify-between">
         <h4 class="font-bold text-xs text-slate-800">مسير رواتب شهر (${currentMonth})</h4>
         <span class="text-xs text-slate-500">عدد السجلات: ${payroll.length}</span>
       </div>
@@ -4348,8 +4368,12 @@ async function renderPayroll(container) {
           لم يتم إصدار مسير رواتب لهذا الشهر بعد. اضغط على زر "إصدار مسير رواتب الشهر" أعلاه لإنشائه تلقائياً.
         </div>
       ` : `
-        <div class="overflow-x-auto">
-          <table class="w-full text-right text-xs">
+        <div class="mobile-table-hint md:hidden">
+          <span class="flex items-center gap-1.5"><span>👈</span> <span>اسحب الجدول لليسار لعرض باقي التفاصيل والصرف</span></span>
+          <span>👉</span>
+        </div>
+        <div class="overflow-x-auto w-full">
+          <table class="w-full min-w-[800px] text-right text-xs">
             <thead class="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold">
               <tr>
                 <th class="p-3.5">الكود</th>
@@ -4557,19 +4581,19 @@ async function renderAttendance(container) {
   const list = attRes.list;
 
   container.innerHTML = `
-    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
       <div>
         <h2 class="text-lg font-bold text-slate-900 flex items-center gap-2">
           <span>📅</span> <span>تسجيل الحضور والغياب اليومي</span>
         </h2>
         <p class="text-xs text-slate-500">حفظ فوري لحضور الأطفال وأوقات الوصول والمغادرة</p>
       </div>
-      <div class="flex items-center gap-2">
-        <input type="date" id="att-date-picker" value="${today}" class="px-3 py-2 rounded-xl border border-slate-200 text-xs outline-none bg-white font-bold">
-        <button id="btn-att-mark-all-present" class="btn btn-secondary text-xs">
+      <div class="flex flex-wrap sm:flex-nowrap items-center gap-2 w-full sm:w-auto">
+        <input type="date" id="att-date-picker" value="${today}" class="flex-1 sm:flex-none px-3 py-2 rounded-xl border border-slate-200 text-xs outline-none bg-white font-bold">
+        <button id="btn-att-mark-all-present" class="flex-1 sm:flex-none btn btn-secondary text-xs py-2 px-2.5 justify-center">
           تحديد الكل حاضر ✓
         </button>
-        <button id="btn-save-attendance" class="btn btn-primary text-xs font-bold">
+        <button id="btn-save-attendance" class="w-full sm:w-auto btn btn-primary text-xs font-bold py-2 justify-center">
           💾 حفظ الحضور
         </button>
       </div>
@@ -4580,8 +4604,12 @@ async function renderAttendance(container) {
       ${list.length === 0 ? `
         <div class="p-12 text-center text-slate-400 text-xs">لا يوجد أطفال نشطون لتسجيل الحضور</div>
       ` : `
-        <div class="overflow-x-auto">
-          <table class="w-full text-right text-xs">
+        <div class="mobile-table-hint md:hidden">
+          <span class="flex items-center gap-1.5"><span>👈</span> <span>اسحب الجدول لليسار لتعديل حالة الحضور والملاحظات</span></span>
+          <span>👉</span>
+        </div>
+        <div class="overflow-x-auto w-full">
+          <table class="w-full min-w-[650px] text-right text-xs">
             <thead class="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold">
               <tr>
                 <th class="p-3.5">الكود</th>
@@ -4707,15 +4735,15 @@ async function renderSessions(container) {
   const sessions = res.sessions;
 
   container.innerHTML = `
-    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
       <div>
         <h2 class="text-lg font-bold text-slate-900 flex items-center gap-2">
           <span>🗣️</span> <span>جلسات التخاطب وصعوبات التعلم</span>
         </h2>
         <p class="text-xs text-slate-500">متابعة دقيقة للجلسات الفردية، التقييمات الإكلينيكية، والفوترة التلقائية</p>
       </div>
-      <div>
-        <button id="btn-add-session" class="btn btn-primary text-xs font-bold">
+      <div class="w-full sm:w-auto">
+        <button id="btn-add-session" class="btn btn-primary text-xs font-bold w-full sm:w-auto justify-center">
           <span>+</span> <span>تسجيل جلسة جديدة</span>
         </button>
       </div>
@@ -4725,8 +4753,12 @@ async function renderSessions(container) {
       ${sessions.length === 0 ? `
         <div class="p-12 text-center text-slate-400 text-xs">لا توجد جلسات مسجلة بعد</div>
       ` : `
-        <div class="overflow-x-auto">
-          <table class="w-full text-right text-xs">
+        <div class="mobile-table-hint md:hidden">
+          <span class="flex items-center gap-1.5"><span>👈</span> <span>اسحب الجدول لليسار لعرض باقي التفاصيل والملاحظات</span></span>
+          <span>👉</span>
+        </div>
+        <div class="overflow-x-auto w-full">
+          <table class="w-full min-w-[700px] text-right text-xs">
             <thead class="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold">
               <tr>
                 <th class="p-3.5">الطفل</th>
@@ -5012,8 +5044,12 @@ async function renderAudit(container) {
       ${logs.length === 0 ? `
         <div class="p-12 text-center text-slate-400 text-xs">السجل فارغ</div>
       ` : `
-        <div class="overflow-x-auto">
-          <table class="w-full text-right text-xs">
+        <div class="mobile-table-hint md:hidden">
+          <span class="flex items-center gap-1.5"><span>👈</span> <span>اسحب الجدول لليسار لعرض باقي التفاصيل والسجل</span></span>
+          <span>👉</span>
+        </div>
+        <div class="overflow-x-auto w-full">
+          <table class="w-full min-w-[700px] text-right text-xs">
             <thead class="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold">
               <tr>
                 <th class="p-3.5">#</th>
