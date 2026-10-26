@@ -113,7 +113,8 @@ function convertSql(sql) {
 function sanitizeParams(args) {
   const params = args.length === 1 && Array.isArray(args[0]) ? args[0] : args;
   return params.map(p => {
-    if (p === undefined) return null;
+    if (p === undefined || p === null) return null;
+    if (typeof p === 'number' && Number.isNaN(p)) return null;
     if (typeof p === 'boolean') return p ? 1 : 0;
     return p;
   });

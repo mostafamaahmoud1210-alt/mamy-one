@@ -477,7 +477,7 @@ async function handleApi(req, res, pathname, query, body) {
         ) VALUES (?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
 
-      const resInsert = insertStudent.run(
+      const resInsert = await insertStudent.run(
         studentCode,
         full_name,
         dob,
@@ -485,11 +485,11 @@ async function handleApi(req, res, pathname, query, body) {
         photo || null,
         enrollment_date,
         classification,
-        classroom_id || null,
-        teacher_id || null,
-        Number(monthly_tuition) || 0,
-        Number(payment_due_day) || 1,
-        Number(discount_amount) || 0,
+        classroom_id && !isNaN(Number(classroom_id)) ? Number(classroom_id) : null,
+        teacher_id && !isNaN(Number(teacher_id)) ? Number(teacher_id) : null,
+        !isNaN(Number(monthly_tuition)) ? Number(monthly_tuition) : 0,
+        !isNaN(Number(payment_due_day)) ? Number(payment_due_day) : 1,
+        !isNaN(Number(discount_amount)) ? Number(discount_amount) : 0,
         discount_reason || null,
         medical_notes || null,
         notes || null,
@@ -497,7 +497,9 @@ async function handleApi(req, res, pathname, query, body) {
         now
       );
 
-      const studentId = Number(resInsert.lastInsertRowid);
+      const studentId = resInsert && resInsert.lastInsertRowid 
+        ? Number(resInsert.lastInsertRowid) 
+        : Number((await db.prepare('SELECT id FROM students WHERE code = ?').get(studentCode))?.id);
 
       // Create primary guardian if mobile & name provided
       if (guardian_name && guardian_mobile) {
@@ -1255,7 +1257,7 @@ async function handleApi(req, res, pathname, query, body) {
           payment_method, payment_category, status, notes, recorded_by_user_id, created_at, updated_at
         ) VALUES (?, ?, ?, ?, ?, ?, ?, 'completed', ?, ?, ?, ?)
       `);
-      const resPay = insPay.run(
+      const resPay = await insPay.run(
         receiptNo,
         student.id,
         payAmt,
@@ -1268,7 +1270,9 @@ async function handleApi(req, res, pathname, query, body) {
         now,
         now
       );
-      const paymentId = Number(resPay.lastInsertRowid);
+      const paymentId = resPay && resPay.lastInsertRowid
+        ? Number(resPay.lastInsertRowid)
+        : Number((await db.prepare('SELECT id FROM payments WHERE receipt_no = ?').get(receiptNo))?.id);
 
       // 2. Allocate payment to charges
       let remainingToAllocate = payAmt;
@@ -1890,8 +1894,8 @@ async function handleApi(req, res, pathname, query, body) {
 
       let generatedCount = 0;
       for (const emp of employees) {
-        const resP = insPayroll.run(emp.id, month, emp.agreed_salary, emp.agreed_salary, now, now);
-        if (resP.changes > 0) generatedCount++;
+        const resP = await insPayroll.run(emp.id, month, emp.agreed_salary, emp.agreed_salary, now, now);
+        if (resP && resP.changes > 0) generatedCount++;
       }
 
       await db.exec('COMMIT');
